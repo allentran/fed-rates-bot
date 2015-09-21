@@ -4,7 +4,6 @@ import re
 import urlparse
 import os
 
-from unidecode import unidecode
 import requests
 from bs4 import BeautifulSoup
 
@@ -74,4 +73,4 @@ if __name__ == "__main__":
         date = statement['date']
         filename = '%s%s%s.txt' % (date[0], date[1], date[2])
         with open(os.path.join('data/statements', filename), 'w') as f:
-            f.write(unidecode(statement['text']))
+            f.write(statement['text'].encode('utf-8'))
