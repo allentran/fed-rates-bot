@@ -10,7 +10,9 @@ class FedLSTM(object):
 
         self.inputs = TT.tensor3() # n_words x minibatch x features
         self.outputs = TT.matrix() # minibatch x n_target_rates
-        self.output_mask = TT.matrix() # minibatch x n_target_rates
+        self.output_mask = TT.ivector() # minibatch x n_target_rates
+
+        minibatch_size = self.inputs.shape[1]
 
         preprocess_layer = layers.DenseLayer(
             self.inputs,
@@ -37,7 +39,7 @@ class FedLSTM(object):
         )
 
         output_layer = layers.DenseLayer(
-            lstm2_layer.h_outputs[-1, :, :],
+            lstm2_layer.h_outputs[self.output_mask, theano.tensor.arange(minibatch_size), :],
             hidden_sizes[2],
             hidden_sizes[3],
             activation=TT.nnet.relu,
@@ -49,10 +51,9 @@ class FedLSTM(object):
             output_layer.h_outputs[None, :, :],
             self.outputs[None, :, :],
             target_size=output_size,
-            mask=self.output_mask
         )
 
-        self.loss_function = mixture_density_layer.nll_cost.mean()
+        self.loss_function = mixture_density_layer.nll_cost.sum()
 
         self.layers = [
             preprocess_layer,

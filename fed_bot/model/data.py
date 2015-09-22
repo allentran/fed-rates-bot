@@ -121,7 +121,6 @@ class DataTransformer(object):
         with open(os.path.join(self.data_dir, 'paired_data.json'), 'w') as f:
             json.dump([doc.to_dict() for doc in self.docs], f, indent=2, sort_keys=True)
 
-
 if __name__ == "__main__":
 
     data_transformer = DataTransformer('data/statements')
