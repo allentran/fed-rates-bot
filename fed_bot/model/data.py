@@ -19,16 +19,25 @@ class PairedDocAndRates(object):
         self.rates = None
 
     def match_rates(self, rates_df, days = [30, 90, 180]):
-        future_rates = {}
-        last_available_date = rates_df['date'].iloc[-1]
-        for add_days in days:
-            future_date = self.date + datetime.timedelta(days=add_days)
+
+        def get_closest_rate(days_to_add):
+            future_date = self.date + datetime.timedelta(days=days_to_add)
             diff = abs(future_date - rates_df['date'])
             if (last_available_date - future_date).total_seconds() >= 0:
                 closest_index = diff.argmin()
-                future_rates[str(add_days)] = rates_df.iloc[closest_index]['value']
+                return float(rates_df.iloc[closest_index]['value'])
             else:
-                future_rates[str(add_days)] = None
+                return None
+
+        future_rates = {}
+        last_available_date = rates_df['date'].iloc[-1]
+        current_rate = get_closest_rate(0)
+        if current_rate:
+            future_rates['0'] = current_rate
+        for add_days in days:
+            future_rate = get_closest_rate(add_days)
+            if future_rate:
+                future_rates[str(add_days)] =  future_rate
 
         self.rates = future_rates
 
