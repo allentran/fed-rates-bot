@@ -11,5 +11,5 @@ def scraper_test():
 def model_test():
 
     model = lstm.FedLSTM(
-        hidden_sizes=[100, 100, 100, 100]
+        hidden_sizes=[10, 10, 10]
     )

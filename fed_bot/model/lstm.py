@@ -6,7 +6,7 @@ from theano_layers import layers
 
 class FedLSTM(object):
 
-    def __init__(self, input_size=300, output_size=3, hidden_sizes=None, truncate=30):
+    def __init__(self, input_size=300, output_size=3, hidden_sizes=None, truncate=30, n_mixtures=5, target_size=3):
 
         self.inputs = TT.tensor3() # n_words x minibatch x features
         self.outputs = TT.matrix() # minibatch x n_target_rates
@@ -18,8 +18,7 @@ class FedLSTM(object):
             self.inputs,
             input_size,
             hidden_sizes[0],
-            activation=TT.nnet.relu,
-            normalize_axis=1
+            activation=TT.tanh
         )
 
         lstm1_layer = layers.LSTMLayer(
@@ -27,7 +26,6 @@ class FedLSTM(object):
             hidden_sizes[1],
             hidden_sizes[0],
             truncate=truncate,
-            normalize_axis=1
         )
 
         lstm2_layer = layers.LSTMLayer(
@@ -35,16 +33,21 @@ class FedLSTM(object):
             hidden_sizes[2],
             hidden_sizes[1],
             truncate=truncate,
-            normalize_axis=1
         )
 
-        output_layer = layers.DenseLayer(
+        preoutput_layer = layers.DenseLayer(
             lstm2_layer.h_outputs[self.output_mask, theano.tensor.arange(minibatch_size), :],
             hidden_sizes[2],
             hidden_sizes[3],
-            activation=TT.nnet.relu,
             normalize_axis=0,
-            feature_axis=1
+            feature_axis=1,
+            activation=TT.tanh
+        )
+
+        output_layer = layers.DenseLayer(
+            preoutput_layer.h_outputs,
+            hidden_sizes[3],
+            (2 + target_size) * n_mixtures,
         )
 
         mixture_density_layer = layers.MixtureDensityLayer(
