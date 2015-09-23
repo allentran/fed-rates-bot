@@ -18,7 +18,7 @@ class FedLSTM(object):
             self.inputs,
             input_size,
             hidden_sizes[0],
-            activation=TT.tanh
+            activation=TT.nnet.relu
         )
 
         lstmforward_layer = layers.LSTMLayer(
@@ -28,23 +28,23 @@ class FedLSTM(object):
             truncate=truncate,
         )
 
-        # lstmbackward_layer = layers.LSTMLayer(
-        #     preprocess_layer.h_outputs[::-1, :, :],
-        #     hidden_sizes[1],
-        #     hidden_sizes[0],
-        #     truncate=truncate,
-        # )
-        #
-        # lstm_concat = TT.concatenate(
-        #     [
-        #         lstmforward_layer.h_outputs,
-        #         lstmbackward_layer.h_outputs,
-        #     ],
-        #     axis=0
-        # )
+        lstmbackward_layer = layers.LSTMLayer(
+            preprocess_layer.h_outputs[::-1, :, :],
+            hidden_sizes[1],
+            hidden_sizes[0],
+            truncate=truncate,
+        )
+        
+        lstm_concat = TT.concatenate(
+            [
+                lstmforward_layer.h_outputs,
+                lstmbackward_layer.h_outputs,
+            ],
+            axis=0
+        )
 
         preoutput_layer = layers.DenseLayer(
-            lstmforward_layer.h_outputs.mean(axis=0),
+            lstm_concat.mean(axis=0),
             hidden_sizes[1],
             hidden_sizes[2],
             normalize_axis=0,
@@ -68,7 +68,7 @@ class FedLSTM(object):
 
         self.layers = [
             preprocess_layer,
-            # lstmbackward_layer,
+            lstmbackward_layer,
             lstmforward_layer,
             preoutput_layer,
             output_layer
@@ -84,5 +84,13 @@ class FedLSTM(object):
             updates=updates
         )
 
+        self._cost= theano.function(
+            inputs=[self.inputs, self.outputs],
+            outputs=self.loss_function,
+        )
+
     def get_cost_and_update(self, inputs, outputs, mask):
         return self._cost_and_update(inputs, outputs)
+
+    def get_cost(self, inputs, outputs):
+        return self._cost(inputs, outputs)

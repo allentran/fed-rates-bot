@@ -5,7 +5,6 @@ import logging
 import json
 
 import numpy as np
-import allen
 
 import lstm
 
@@ -65,7 +64,7 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
 def train(data_path):
 
     n_epochs = 200
-    batch_size = 10
+    batch_size = 5
     test_frac = 0.2
 
     batched_data = batch_and_load_data(data_path, batch_size=batch_size)
@@ -79,16 +78,30 @@ def train(data_path):
         hidden_sizes=[500, 400, 300, 100]
     )
 
-    for obs in train_data:
-        print  model.get_cost_and_update(
-            obs['word_vectors'],
-            obs['rates'],
-            obs['last_indexes']
-        )
+    for epoch_idx in xrange(n_epochs):
+        train_cost = 0
+        random.shuffle(train_data)
+        for obs in train_data:
+            cost = model.get_cost_and_update(
+                obs['word_vectors'],
+                obs['rates'],
+                obs['last_indexes']
+            )
+            cost /= obs['word_vectors'].shape[1]
+            train_cost += cost
 
-    import IPython
-    IPython.embed()
+        if epoch_idx % 5 == 0:
+            test_cost = 0
+            for obs in test_data:
+                cost = model.get_cost(
+                        obs['word_vectors'],
+                        obs['rates']
+                )
+                cost /= obs['word_vectors'].shape[1]
+                test_cost += cost
+            test_cost /= len(test_data)
+            train_cost /= len(train_data)
+            print 'train_cost=%s, test_cost=%s after %s epochs' % (train_cost, test_cost, epoch_idx)
 
 if __name__ == "__main__":
-    allen.setup()
     train('data/statements/paired_data.json')
