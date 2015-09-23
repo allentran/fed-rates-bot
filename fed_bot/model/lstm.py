@@ -6,7 +6,7 @@ from theano_layers import layers
 
 class FedLSTM(object):
 
-    def __init__(self, input_size=300, output_size=3, hidden_sizes=None, truncate=30, n_mixtures=5, target_size=3):
+    def __init__(self, input_size=300, output_size=3, hidden_sizes=None, truncate=10, n_mixtures=5, target_size=3):
 
         self.inputs = TT.tensor3() # n_words x minibatch x features
         self.outputs = TT.matrix() # minibatch x n_target_rates
@@ -21,24 +21,32 @@ class FedLSTM(object):
             activation=TT.tanh
         )
 
-        lstm1_layer = layers.LSTMLayer(
+        lstmforward_layer = layers.LSTMLayer(
             preprocess_layer.h_outputs,
             hidden_sizes[1],
             hidden_sizes[0],
             truncate=truncate,
         )
 
-        lstm2_layer = layers.LSTMLayer(
-            lstm1_layer.h_outputs,
-            hidden_sizes[2],
-            hidden_sizes[1],
-            truncate=truncate,
-        )
+        # lstmbackward_layer = layers.LSTMLayer(
+        #     preprocess_layer.h_outputs[::-1, :, :],
+        #     hidden_sizes[1],
+        #     hidden_sizes[0],
+        #     truncate=truncate,
+        # )
+        #
+        # lstm_concat = TT.concatenate(
+        #     [
+        #         lstmforward_layer.h_outputs,
+        #         lstmbackward_layer.h_outputs,
+        #     ],
+        #     axis=0
+        # )
 
         preoutput_layer = layers.DenseLayer(
-            lstm2_layer.h_outputs[self.output_mask, theano.tensor.arange(minibatch_size), :],
+            lstmforward_layer.h_outputs.mean(axis=0),
+            hidden_sizes[1],
             hidden_sizes[2],
-            hidden_sizes[3],
             normalize_axis=0,
             feature_axis=1,
             activation=TT.tanh
@@ -46,7 +54,7 @@ class FedLSTM(object):
 
         output_layer = layers.DenseLayer(
             preoutput_layer.h_outputs,
-            hidden_sizes[3],
+            hidden_sizes[2],
             (2 + target_size) * n_mixtures,
         )
 
@@ -60,8 +68,9 @@ class FedLSTM(object):
 
         self.layers = [
             preprocess_layer,
-            lstm1_layer,
-            lstm2_layer,
+            # lstmbackward_layer,
+            lstmforward_layer,
+            preoutput_layer,
             output_layer
         ]
 
@@ -70,10 +79,10 @@ class FedLSTM(object):
             updates += layer.get_updates(self.loss_function)
 
         self._cost_and_update = theano.function(
-            inputs=[self.inputs, self.outputs, self.output_mask],
+            inputs=[self.inputs, self.outputs],
             outputs=self.loss_function,
             updates=updates
         )
 
     def get_cost_and_update(self, inputs, outputs, mask):
-        return self._cost_and_update(inputs, outputs, mask)
+        return self._cost_and_update(inputs, outputs)
