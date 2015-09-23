@@ -89,8 +89,16 @@ class FedLSTM(object):
             outputs=self.loss_function,
         )
 
+        self._output = theano.function(
+            inputs=[self.inputs, self.outputs],
+            outputs=mixture_density_layer.outputs,
+        )
+
     def get_cost_and_update(self, inputs, outputs, mask):
         return self._cost_and_update(inputs, outputs)
 
     def get_cost(self, inputs, outputs):
         return self._cost(inputs, outputs)
+
+    def get_output(self, inputs, outputs):
+        return self._output(inputs, outputs)
