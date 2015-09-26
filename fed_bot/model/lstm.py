@@ -37,8 +37,8 @@ class FedLSTM(object):
         
         lstm_concat = TT.concatenate(
             [
-                lstmforward_layer.h_outputs,
-                lstmbackward_layer.h_outputs,
+                lstmforward_layer.h_outputs.max(axis=0)[None, :, :],
+                lstmbackward_layer.h_outputs.max(axis=0)[None, :, :],
             ],
             axis=0
         )

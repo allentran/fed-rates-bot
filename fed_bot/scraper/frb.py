@@ -54,7 +54,7 @@ class Scraper(object):
             row_links = soup.find_all('a')
             links += [urlparse.urljoin(self.recent_url, l['href']) for l in row_links if l.get_text().strip() == link_text]
 
-        links = [link for link in links if link.find('.pdf') == -1]
+        links = [link for link in links if link.find('.pdf') == -1 and link.find('beigebook') == -1]
 
         return links
 
