@@ -94,7 +94,7 @@ class DataTransformer(object):
                             except ValueError:
                                 pass
 
-                paired_doc = PairedDocAndRates(date, np.array(vectors))
+                paired_doc = PairedDocAndRates(date, np.array(vectors).astype('float16'))
                 paired_doc.match_rates(self.rates)
 
                 return paired_doc
