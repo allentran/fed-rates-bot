@@ -5,6 +5,7 @@ import os
 import re
 import datetime
 
+import unidecode
 from spacy.en import English
 import requests
 import pandas as pd
@@ -73,35 +74,31 @@ class DataTransformer(object):
             self.rates['date'] = self.rates['date'].apply(lambda s: datetime.datetime.strptime(s, '%Y-%m-%d'))
             self.rates.sort('date')
 
-    def get_docs(self):
+    def get_docs(self, min_sentence_length=8):
 
         def parse_doc(doc_path):
             with open(doc_path, 'r') as f:
-                try:
-                    text = f.read().decode('utf-8')
-                except UnicodeDecodeError:
-                    print doc_path
-                    return None
+                text = unidecode.unidecode(unicode(f.read().decode('iso-8859-1')))
                 text = ' '.join(text.split()).strip()
+            if len(text) > 0:
+                date = datetime.datetime.strptime(date_re.search(doc_path).group(0), '%Y%m%d')
+                doc = nlp(unicode(text))
 
-            date = datetime.datetime.strptime(date_re.search(doc_path).group(0), '%Y%m%d')
-            match = datetext_re.search(text)
-            text = text[match.end():]
-            doc = nlp(text)
+                vectors = []
+                sentences = list(doc.sents)
+                for sent in sentences[1:]:
+                    if len(sent) > min_sentence_length:
+                        for token in sent:
+                            try:
+                                vectors.append(token.repvec)
+                            except ValueError:
+                                pass
 
-            vectors = []
-            for token in doc:
-                try:
-                    vectors.append(token.repvec)
-                except ValueError:
-                    pass
+                paired_doc = PairedDocAndRates(date, np.array(vectors))
+                paired_doc.match_rates(self.rates)
 
-            paired_doc = PairedDocAndRates(date, np.array(vectors))
-            paired_doc.match_rates(self.rates)
+                return paired_doc
 
-            return paired_doc
-
-        datetext_re = re.compile(r'\w \d{1,}, \d{4}')
         date_re = re.compile(r'\d{8}')
         file_re = re.compile(r'\d{8}')
         nlp = English()
@@ -123,7 +120,7 @@ class DataTransformer(object):
 
 if __name__ == "__main__":
 
-    data_transformer = DataTransformer('data/statements')
+    data_transformer = DataTransformer('data')
     data_transformer.get_rates('51c09c6b8aa464671aa8ac96c76a8416')
     data_transformer.get_docs()
     data_transformer.save_output()
