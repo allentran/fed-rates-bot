@@ -49,7 +49,7 @@ class FedLSTM(object):
             hidden_sizes[2],
             normalize_axis=0,
             feature_axis=1,
-            activation=TT.tanh
+            activation=TT.nnet.relu
         )
 
         output_layer = layers.DenseLayer(
@@ -90,7 +90,7 @@ class FedLSTM(object):
         )
 
         self._output = theano.function(
-            inputs=[self.inputs, self.outputs],
+            inputs=[self.inputs],
             outputs=mixture_density_layer.outputs,
         )
 
@@ -101,4 +101,4 @@ class FedLSTM(object):
         return self._cost(inputs, outputs)
 
     def get_output(self, inputs, outputs):
-        return self._output(inputs, outputs)
+        return self._output(inputs)
