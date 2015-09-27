@@ -38,7 +38,7 @@ def find_regime(date):
     for regime, interval in fed_regimes.iteritems():
         if interval.contains(date):
             return regime
-        raise ValueError("Could not find regime for date, %s", date)
+    raise ValueError("Could not find regime for date, %s", date)
 
 class PairedDocAndRates(object):
 
