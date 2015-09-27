@@ -22,7 +22,7 @@ class Interval(object):
 
     def contains(self, new_date):
         assert isinstance(new_date, datetime.date)
-        return (new_date > self.end) and (new_date <= self.end)
+        return (new_date >= self.start) and (new_date <= self.end)
 
 fed_regimes = {
     0: Interval(datetime.date(1951, 4, 2), datetime.date(1970, 1, 31)),
