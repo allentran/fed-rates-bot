@@ -37,15 +37,15 @@ class FedLSTM(object):
         
         lstm_concat = TT.concatenate(
             [
-                lstmforward_layer.h_outputs.max(axis=0)[None, :, :],
-                lstmbackward_layer.h_outputs.max(axis=0)[None, :, :],
+                lstmforward_layer.h_outputs,
+                lstmbackward_layer.h_outputs,
             ],
-            axis=0
+            axis=2
         )
 
         preoutput_layer = layers.DenseLayer(
-            lstm_concat.mean(axis=0),
-            hidden_sizes[1],
+            lstm_concat.max(axis=0),
+            hidden_sizes[1] * 2,
             hidden_sizes[2],
             normalize_axis=0,
             feature_axis=1,
