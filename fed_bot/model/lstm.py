@@ -6,7 +6,7 @@ from theano_layers import layers
 
 class FedLSTM(object):
 
-    def __init__(self, input_size=300, output_size=3, hidden_sizes=None, truncate=10, n_mixtures=5, target_size=3):
+    def __init__(self, input_size=300, output_size=3, hidden_sizes=None, truncate=10, n_mixtures=5, target_size=3, l2_penalty=0):
 
         self.inputs = TT.tensor3() # n_words x minibatch x features
         self.outputs = TT.matrix() # minibatch x n_target_rates
@@ -64,8 +64,6 @@ class FedLSTM(object):
             target_size=output_size,
         )
 
-        self.loss_function = mixture_density_layer.nll_cost.sum()
-
         self.layers = [
             preprocess_layer,
             lstmbackward_layer,
@@ -74,9 +72,15 @@ class FedLSTM(object):
             output_layer
         ]
 
+        l2_cost = 0
+        for layer in self.layers:
+            l2_cost += l2_penalty * layer.get_l2sum()
+
+        self.loss_function = mixture_density_layer.nll_cost.sum()
+
         updates = []
         for layer in self.layers:
-            updates += layer.get_updates(self.loss_function)
+            updates += layer.get_updates(self.loss_function + l2_cost)
 
         self._cost_and_update = theano.function(
             inputs=[self.inputs, self.outputs],
