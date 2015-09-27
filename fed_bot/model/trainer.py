@@ -4,6 +4,7 @@ import random
 import logging
 import json
 
+import allen_utils
 import numpy as np
 
 import lstm
@@ -101,7 +102,8 @@ def train(data_path):
                 test_cost += cost
             test_cost /= len(test_data)
             train_cost /= len(train_data)
-            print 'train_cost=%s, test_cost=%s after %s epochs' % (train_cost, test_cost, epoch_idx)
+            logging.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
 
 if __name__ == "__main__":
+    allen_utils.setup()
     train('data/statements/paired_data.json')
