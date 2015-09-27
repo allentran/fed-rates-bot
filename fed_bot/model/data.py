@@ -25,11 +25,12 @@ class Interval(object):
         return (new_date > self.end) and (new_date <= self.end)
 
 fed_regimes = {
-    0: Interval(datetime.date(1970, 2, 1), datetime.date(1978, 3, 7)),
-    1: Interval(datetime.date(1978, 3, 8), datetime.date(1979, 8, 6)),
-    2: Interval(datetime.date(1979, 8, 7), datetime.date(1987, 8, 11)),
-    3: Interval(datetime.date(1987, 8, 12), datetime.date(2006, 1, 31)),
-    4: Interval(datetime.date(2006, 2, 1), datetime.date(2020, 1, 31)),
+    0: Interval(datetime.date(1951, 4, 2), datetime.date(1970, 1, 31)),
+    1: Interval(datetime.date(1970, 2, 1), datetime.date(1978, 3, 7)),
+    2: Interval(datetime.date(1978, 3, 8), datetime.date(1979, 8, 6)),
+    3: Interval(datetime.date(1979, 8, 7), datetime.date(1987, 8, 11)),
+    4: Interval(datetime.date(1987, 8, 12), datetime.date(2006, 1, 31)),
+    5: Interval(datetime.date(2006, 2, 1), datetime.date(2020, 1, 31)),
 }
 
 def find_regime(date):
@@ -37,6 +38,7 @@ def find_regime(date):
     for regime, interval in fed_regimes.iteritems():
         if interval.contains(date):
             return regime
+        raise ValueError("Could not find regime for date, %s", date)
 
 class PairedDocAndRates(object):
 
