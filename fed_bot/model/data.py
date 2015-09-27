@@ -11,13 +11,42 @@ import requests
 import pandas as pd
 import numpy as np
 
+class Interval(object):
+
+    def __init__(self, start, end):
+
+        assert isinstance(start, datetime.date) and isinstance(end, datetime.date)
+
+        self.start = start
+        self.end = end
+
+    def contains(self, new_date):
+        assert isinstance(new_date, datetime.date)
+        return (new_date > self.end) and (new_date <= self.end)
+
+fed_regimes = {
+    0: Interval(datetime.date(1970, 2, 1), datetime.date(1978, 3, 7)),
+    1: Interval(datetime.date(1978, 3, 8), datetime.date(1979, 8, 6)),
+    2: Interval(datetime.date(1979, 8, 7), datetime.date(1987, 8, 11)),
+    3: Interval(datetime.date(1987, 8, 12), datetime.date(2006, 1, 31)),
+    4: Interval(datetime.date(2006, 2, 1), datetime.date(2020, 1, 31)),
+}
+
+def find_regime(date):
+
+    for regime, interval in fed_regimes.iteritems():
+        if interval.contains(date):
+            return regime
+
 class PairedDocAndRates(object):
 
-    def __init__(self, date, vectors):
+    def __init__(self, date, vectors, is_minutes):
 
         self.date = date
         self.vectors = vectors
+        self.is_minutes = is_minutes
         self.rates = None
+        self.regime = find_regime(date)
 
     def match_rates(self, rates_df, days = [30, 90, 180]):
 
@@ -47,7 +76,9 @@ class PairedDocAndRates(object):
         return dict(
             date = self.date.strftime('%Y-%m-%d'),
             vectors = self.vectors.tolist(),
-            rates = self.rates
+            rates = self.rates,
+            is_minutes = self.is_minutes,
+            regime = self.regime
         )
 
 
@@ -71,7 +102,7 @@ class DataTransformer(object):
         r = requests.get(self.url, params=params)
         if r.status_code == 200:
             self.rates = pd.DataFrame(r.json()['observations'])
-            self.rates['date'] = self.rates['date'].apply(lambda s: datetime.datetime.strptime(s, '%Y-%m-%d'))
+            self.rates['date'] = self.rates['date'].apply(lambda s: datetime.datetime.strptime(s, '%Y-%m-%d').date())
             self.rates.sort('date')
 
     def get_docs(self, min_sentence_length=8):
@@ -81,7 +112,7 @@ class DataTransformer(object):
                 text = unidecode.unidecode(unicode(f.read().decode('iso-8859-1')))
                 text = ' '.join(text.split()).strip()
             if len(text) > 0:
-                date = datetime.datetime.strptime(date_re.search(doc_path).group(0), '%Y%m%d')
+                date = datetime.datetime.strptime(date_re.search(doc_path).group(0), '%Y%m%d').date()
                 doc = nlp(unicode(text))
 
                 vectors = []
@@ -94,7 +125,7 @@ class DataTransformer(object):
                             except ValueError:
                                 pass
 
-                paired_doc = PairedDocAndRates(date, np.array(vectors).astype('float16'))
+                paired_doc = PairedDocAndRates(date, np.array(vectors).astype('float16'), doc_path.find('minutes') > -1)
                 paired_doc.match_rates(self.rates)
 
                 return paired_doc
