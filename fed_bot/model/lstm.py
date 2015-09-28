@@ -21,11 +21,9 @@ class FedLSTM(object):
 
         self.inputs = TT.tensor3() # n_words x minibatch x features
         self.outputs = TT.matrix() # minibatch x n_target_rates
-        self.output_mask = TT.ivector() # minibatch x n_target_rates
         self.regimes = TT.ivector() # minibatch
         self.doc_types = TT.ivector() # minibatch
-
-
+        self.mask = TT.matrix() # n_words x minibatch
 
         regime_layer = layers.VectorEmbeddings(
             n_vectors=n_regimes,
@@ -37,21 +35,12 @@ class FedLSTM(object):
             size=doctype_size
         )
 
-        regime_vectors = regime_layer.V[self.regimes][None, :, :]
-        doctype_vectors = doctype_layer.V[self.doc_types][None, :, :]
-
-        input_and_context = TT.concatenate(
-            [
-                self.inputs,
-                regime_vectors,
-                doctype_vectors
-            ],
-            axis=2
-        )
+        regime_vectors = regime_layer.V[self.regimes]
+        doctype_vectors = doctype_layer.V[self.doc_types]
 
         preprocess_layer = layers.DenseLayer(
-            input_and_context,
-            input_size + doctype_size + regime_size,
+            self.inputs,
+            input_size,
             hidden_sizes[0],
             activation=TT.nnet.relu
         )
@@ -78,9 +67,19 @@ class FedLSTM(object):
             axis=2
         )
 
+        max_pooled_words = (lstm_concat * self.mask[:, :, None]).max(axis=0)
+        words_and_context = TT.concatenate(
+            [
+                max_pooled_words,
+                regime_vectors,
+                doctype_vectors
+            ],
+            axis=1
+        )
+
         preoutput_layer = layers.DenseLayer(
-            lstm_concat.max(axis=0),
-            hidden_sizes[1] * 2,
+            words_and_context,
+            hidden_sizes[1] * 2 + doctype_size + regime_size,
             hidden_sizes[2],
             normalize_axis=0,
             feature_axis=1,
@@ -104,40 +103,44 @@ class FedLSTM(object):
             lstmbackward_layer,
             lstmforward_layer,
             preoutput_layer,
-            output_layer
+            output_layer,
         ]
 
         l2_cost = 0
         for layer in self.layers:
             l2_cost += l2_penalty * layer.get_l2sum()
+        l2_cost += l2_penalty * regime_layer.get_l2sum(self.regimes)
+        l2_cost += l2_penalty * doctype_layer.get_l2sum(self.doc_types)
 
         self.loss_function = mixture_density_layer.nll_cost.sum()
 
         updates = []
         for layer in self.layers:
             updates += layer.get_updates(self.loss_function + l2_cost)
+        updates += regime_layer.get_updates(self.loss_function + l2_cost, self.regimes)
+        updates += doctype_layer.get_updates(self.loss_function + l2_cost, self.doc_types)
 
         self._cost_and_update = theano.function(
-            inputs=[self.inputs, self.outputs, self.regimes, self.doc_types],
+            inputs=[self.inputs, self.outputs, self.mask, self.regimes, self.doc_types],
             outputs=self.loss_function,
             updates=updates
         )
 
         self._cost= theano.function(
-            inputs=[self.inputs, self.outputs, self.regimes, self.doc_types],
+            inputs=[self.inputs, self.outputs, self.mask, self.regimes, self.doc_types],
             outputs=self.loss_function,
         )
 
         self._output = theano.function(
-            inputs=[self.inputs, self.regimes, self.doc_types],
+            inputs=[self.inputs, self.mask, self.regimes, self.doc_types],
             outputs=mixture_density_layer.outputs,
         )
 
-    def get_cost_and_update(self, inputs, outputs, regimes, doctypes):
-        return self._cost_and_update(inputs, outputs, regimes, doctypes)
+    def get_cost_and_update(self, inputs, outputs, mask, regimes, doctypes):
+        return self._cost_and_update(inputs, outputs, mask, regimes, doctypes)
 
-    def get_cost(self, inputs, outputs, regimes, doctypes):
-        return self._cost(inputs, outputs, regimes, doctypes)
+    def get_cost(self, inputs, outputs, mask, regimes, doctypes):
+        return self._cost(inputs, outputs, mask, regimes, doctypes)
 
-    def get_output(self, inputs, regimes, doctypes):
-        return self._output(inputs, regimes, doctypes)
+    def get_output(self, inputs, mask, regimes, doctypes):
+        return self._output(inputs, mask, regimes, doctypes)

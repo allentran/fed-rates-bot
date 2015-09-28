@@ -31,15 +31,15 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
 
         target_rates = np.zeros((batch_size, n_rates))
         word_vectors = np.zeros((max_length, batch_size, data_to_batch[0]['vectors'].shape[1]))
+        max_mask = np.zeros((max_length, batch_size))
         regimes = np.zeros(batch_size)
         doc_types = np.zeros(batch_size)
-        last_indexes = []
         for data_idx in xrange(batch_size):
             obs = data_to_batch[data_idx]
             vectors = obs['vectors']
             length = vectors.shape[0]
             word_vectors[0:length, data_idx, :] = vectors
-            last_indexes.append(length - 1)
+            max_mask[0:length, data_idx] = 1
             target_rates[data_idx, :] = calc_target_rates(obs['rates'], days=['30', '90', '180'])
             if obs['is_minutes']:
                 doc_types[data_idx] = 1
@@ -47,7 +47,7 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
 
         return dict(
             word_vectors=word_vectors.astype('float32'),
-            last_indexes=np.array(last_indexes).astype('int32'),
+            max_mask=max_mask.astype('float32'),
             rates=target_rates.astype('float32'),
             doc_types=np.array(doc_types).astype('int32'),
             regimes=np.array(regimes).astype('int32'),
@@ -97,7 +97,9 @@ def train(data_path):
             cost = model.get_cost_and_update(
                 obs['word_vectors'],
                 obs['rates'],
-                obs['last_indexes']
+                obs['mask'],
+                obs['regimes'],
+                obs['doc_types']
             )
             cost /= obs['word_vectors'].shape[1]
             train_cost += cost
@@ -107,7 +109,10 @@ def train(data_path):
             for obs in test_data:
                 cost = model.get_cost(
                         obs['word_vectors'],
-                        obs['rates']
+                        obs['rates'],
+                        obs['mask'],
+                        obs['regimes'],
+                        obs['doc_types']
                 )
                 cost /= obs['word_vectors'].shape[1]
                 test_cost += cost
