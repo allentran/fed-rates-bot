@@ -6,17 +6,52 @@ from theano_layers import layers
 
 class FedLSTM(object):
 
-    def __init__(self, input_size=300, output_size=3, hidden_sizes=None, truncate=10, n_mixtures=5, target_size=3, l2_penalty=0):
+    def __init__(
+            self,
+            input_size=300,
+            output_size=3,
+            hidden_sizes=None,
+            truncate=10,
+            n_mixtures=5,
+            target_size=3,
+            l2_penalty=0,
+            n_regimes=6,
+            regime_size=5,
+            doctype_size=5):
 
         self.inputs = TT.tensor3() # n_words x minibatch x features
         self.outputs = TT.matrix() # minibatch x n_target_rates
         self.output_mask = TT.ivector() # minibatch x n_target_rates
+        self.regimes = TT.ivector() # minibatch
+        self.doc_types = TT.ivector() # minibatch
 
-        minibatch_size = self.inputs.shape[1]
+
+
+        regime_layer = layers.VectorEmbeddings(
+            n_vectors=n_regimes,
+            size=regime_size
+        )
+
+        doctype_layer = layers.VectorEmbeddings(
+            n_vectors=2,
+            size=doctype_size
+        )
+
+        regime_vectors = regime_layer.V[self.regimes][None, :, :]
+        doctype_vectors = doctype_layer.V[self.doc_types][None, :, :]
+
+        input_and_context = TT.concatenate(
+            [
+                self.inputs,
+                regime_vectors,
+                doctype_vectors
+            ],
+            axis=2
+        )
 
         preprocess_layer = layers.DenseLayer(
-            self.inputs,
-            input_size,
+            input_and_context,
+            input_size + doctype_size + regime_size,
             hidden_sizes[0],
             activation=TT.nnet.relu
         )
@@ -83,26 +118,26 @@ class FedLSTM(object):
             updates += layer.get_updates(self.loss_function + l2_cost)
 
         self._cost_and_update = theano.function(
-            inputs=[self.inputs, self.outputs],
+            inputs=[self.inputs, self.outputs, self.regimes, self.doc_types],
             outputs=self.loss_function,
             updates=updates
         )
 
         self._cost= theano.function(
-            inputs=[self.inputs, self.outputs],
+            inputs=[self.inputs, self.outputs, self.regimes, self.doc_types],
             outputs=self.loss_function,
         )
 
         self._output = theano.function(
-            inputs=[self.inputs],
+            inputs=[self.inputs, self.regimes, self.doc_types],
             outputs=mixture_density_layer.outputs,
         )
 
-    def get_cost_and_update(self, inputs, outputs, mask):
-        return self._cost_and_update(inputs, outputs)
+    def get_cost_and_update(self, inputs, outputs, regimes, doctypes):
+        return self._cost_and_update(inputs, outputs, regimes, doctypes)
 
-    def get_cost(self, inputs, outputs):
-        return self._cost(inputs, outputs)
+    def get_cost(self, inputs, outputs, regimes, doctypes):
+        return self._cost(inputs, outputs, regimes, doctypes)
 
-    def get_output(self, inputs, outputs):
-        return self._output(inputs)
+    def get_output(self, inputs, regimes, doctypes):
+        return self._output(inputs, regimes, doctypes)

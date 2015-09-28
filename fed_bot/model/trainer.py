@@ -31,18 +31,26 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
 
         target_rates = np.zeros((batch_size, n_rates))
         word_vectors = np.zeros((max_length, batch_size, data_to_batch[0]['vectors'].shape[1]))
+        regimes = np.zeros(batch_size)
+        doc_types = np.zeros(batch_size)
         last_indexes = []
         for data_idx in xrange(batch_size):
-            vectors = data_to_batch[data_idx]['vectors']
-            length = len(vectors)
+            obs = data_to_batch[data_idx]
+            vectors = obs['vectors']
+            length = vectors.shape[0]
             word_vectors[0:length, data_idx, :] = vectors
             last_indexes.append(length - 1)
-            target_rates[data_idx, :] = calc_target_rates(data_to_batch[data_idx]['rates'], days=['30', '90', '180'])
+            target_rates[data_idx, :] = calc_target_rates(obs['rates'], days=['30', '90', '180'])
+            if obs['is_minutes']:
+                doc_types[data_idx] = 1
+            regimes[data_idx] = obs['regime']
 
         return dict(
             word_vectors=word_vectors.astype('float32'),
             last_indexes=np.array(last_indexes).astype('int32'),
-            rates=target_rates.astype('float32')
+            rates=target_rates.astype('float32'),
+            doc_types=np.array(doc_types).astype('int32'),
+            regimes=np.array(regimes).astype('int32'),
         )
 
     with open(data_path, 'r') as json_file:
@@ -53,7 +61,7 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
         data['vectors'] = np.array(data['vectors'])
 
     batched_data = []
-    paired_data = sorted(paired_data, key=lambda obs: len(obs['vectors']))
+    paired_data = sorted(paired_data, key=lambda obs: obs['vectors'].shape[0])
 
     for start_idx in xrange(0, len(paired_data), batch_size):
         end_idx = min([start_idx + batch_size, len(paired_data)])
@@ -76,7 +84,10 @@ def train(data_path):
     train_data = batched_data[test_idx:]
 
     model = lstm.FedLSTM(
-        hidden_sizes=[500, 400, 300, 100]
+        hidden_sizes=[500, 400, 300, 100],
+        l2_penalty=1e-4,
+        n_mixtures=1,
+        truncate=100
     )
 
     for epoch_idx in xrange(n_epochs):
