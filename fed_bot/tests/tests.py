@@ -27,4 +27,10 @@ def model_test():
         hidden_sizes=[10, 10, 10, 10]
     )
 
-    model.get_cost_and_update(test_ob)
+    model.get_cost_and_update(
+        test_ob['word_vectors'],
+        test_ob['rates'],
+        test_ob['max_mask'],
+        test_ob['regimes'],
+        test_ob['doc_types']
+    )
