@@ -16,11 +16,11 @@ def model_test():
     T = 20
 
     test_ob = dict(
-        word_vectors=np.random.standard_normal((T, n_batch, 300)),
-        rates=np.ones((n_batch, 3)),
-        max_mask=np.ones((T, n_batch)),
-        regimes=np.ones(n_batch),
-        doc_types=np.ones(n_batch)
+        word_vectors=np.random.standard_normal((T, n_batch, 300)).astype('float32'),
+        rates=np.ones((n_batch, 3)).astype('float32'),
+        max_mask=np.ones((T, n_batch)).astype('float32'),
+        regimes=np.ones(n_batch).astype('int32'),
+        doc_types=np.ones(n_batch).astype('int32')
     )
 
     model = lstm.FedLSTM(
