@@ -109,8 +109,8 @@ class FedLSTM(object):
         l2_cost = 0
         for layer in self.layers:
             l2_cost += l2_penalty * layer.get_l2sum()
-        l2_cost += l2_penalty * regime_layer.get_l2sum(self.regimes)
-        l2_cost += l2_penalty * doctype_layer.get_l2sum(self.doc_types)
+        l2_cost += l2_penalty * regime_layer.get_l2sum()
+        l2_cost += l2_penalty * doctype_layer.get_l2sum()
 
         self.loss_function = mixture_density_layer.nll_cost.sum()
 

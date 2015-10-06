@@ -70,7 +70,7 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
     return batched_data
 
 
-def train(data_path):
+def train(data_path, logger):
 
     n_epochs = 200
     batch_size = 5
@@ -118,8 +118,8 @@ def train(data_path):
                 test_cost += cost
             test_cost /= len(test_data)
             train_cost /= len(train_data)
-            logging.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
+            logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
 
 if __name__ == "__main__":
-    allen_utils.setup()
-    train('data/statements/paired_data.json')
+    logger = allen_utils.get_logger(__name__)
+    train('data/statements/paired_data.json', logger)
