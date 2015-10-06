@@ -24,7 +24,8 @@ def model_test():
     )
 
     model = lstm.FedLSTM(
-        hidden_sizes=[10, 10, 10, 10]
+        hidden_sizes=[10, 10, 10, 10],
+        n_mixtures=2
     )
 
     model.get_cost_and_update(

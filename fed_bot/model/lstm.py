@@ -96,6 +96,7 @@ class FedLSTM(object):
             output_layer.h_outputs[None, :, :],
             self.outputs[None, :, :],
             target_size=output_size,
+            n_mixtures=n_mixtures
         )
 
         self.layers = [
