@@ -1,5 +1,7 @@
 __author__ = 'allentran'
 
+import numpy as np
+
 from ..scraper import Scraper
 from ..model import lstm
 
@@ -10,6 +12,19 @@ def scraper_test():
 
 def model_test():
 
+    n_batch = 10
+    T = 20
+
+    test_ob = dict(
+        word_vectors=np.random.standard_normal((T, n_batch, 300)),
+        rates=np.ones((n_batch, 3)),
+        max_mask=np.ones((T, n_batch)),
+        regimes=np.ones(n_batch),
+        doc_types=np.ones(n_batch)
+    )
+
     model = lstm.FedLSTM(
         hidden_sizes=[10, 10, 10, 10]
     )
+
+    model.get_cost_and_update(test_ob)
