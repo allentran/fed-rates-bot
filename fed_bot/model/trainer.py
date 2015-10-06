@@ -73,7 +73,7 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
 def train(data_path, logger):
 
     n_epochs = 200
-    batch_size = 5
+    batch_size = 32
     test_frac = 0.2
 
     batched_data = batch_and_load_data(data_path, batch_size=batch_size)
@@ -86,7 +86,7 @@ def train(data_path, logger):
     model = lstm.FedLSTM(
         hidden_sizes=[500, 400, 300, 100],
         l2_penalty=1e-4,
-        n_mixtures=1,
+        n_mixtures=2,
         truncate=100
     )
 
@@ -97,7 +97,7 @@ def train(data_path, logger):
             cost = model.get_cost_and_update(
                 obs['word_vectors'],
                 obs['rates'],
-                obs['mask'],
+                obs['max_mask'],
                 obs['regimes'],
                 obs['doc_types']
             )
@@ -110,7 +110,7 @@ def train(data_path, logger):
                 cost = model.get_cost(
                         obs['word_vectors'],
                         obs['rates'],
-                        obs['mask'],
+                        obs['max_mask'],
                         obs['regimes'],
                         obs['doc_types']
                 )
@@ -122,4 +122,4 @@ def train(data_path, logger):
 
 if __name__ == "__main__":
     logger = allen_utils.get_logger(__name__)
-    train('data/statements/paired_data.json', logger)
+    train('/storage/allen/fedbot/data/paired_data.json', logger)
