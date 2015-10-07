@@ -77,12 +77,25 @@ class PairedDocAndRates(object):
 
         return dict(
             date = self.date.strftime('%Y-%m-%d'),
-            vectors = self.vectors.tolist(),
+            vectors = self.vectors,
             rates = self.rates,
             is_minutes = self.is_minutes,
             regime = self.regime
         )
 
+class Vocab(object):
+
+    def __init__(self):
+
+        self.current_count = -1
+        self.vocab = {}
+
+    def update_and_get_count(self, word):
+
+        if word not in self.vocab:
+            self.current_count += 1
+            self.vocab[word] = self.current_count
+        return self.current_count
 
 class DataTransformer(object):
 
@@ -90,6 +103,8 @@ class DataTransformer(object):
 
         self.url = 'https://api.stlouisfed.org/fred/series/observations'
         self.data_dir = data_dir
+
+        self.vocab = set()
 
         self.rates = None
         self.docs = None
@@ -117,17 +132,15 @@ class DataTransformer(object):
                 date = datetime.datetime.strptime(date_re.search(doc_path).group(0), '%Y%m%d').date()
                 doc = nlp(unicode(text))
 
-                vectors = []
+                doc_as_ints = []
+
                 sentences = list(doc.sents)
                 for sent in sentences[1:]:
                     if len(sent) > min_sentence_length:
-                        for token in sent:
-                            try:
-                                vectors.append(token.repvec)
-                            except ValueError:
-                                pass
+                        for token in doc:
+                            doc_as_ints.append(self.vocab.add(token.text))
 
-                paired_doc = PairedDocAndRates(date, np.array(vectors).astype('float16'), doc_path.find('minutes') > -1)
+                paired_doc = PairedDocAndRates(date, doc_as_ints, doc_path.find('minutes') > -1)
                 paired_doc.match_rates(self.rates)
 
                 return paired_doc
