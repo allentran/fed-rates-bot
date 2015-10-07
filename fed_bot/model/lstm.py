@@ -52,17 +52,32 @@ class FedLSTM(object):
             truncate=truncate,
         )
 
+        lstmforward2_layer = layers.LSTMLayer(
+            lstmforward_layer.h_outputs,
+            hidden_sizes[1],
+            hidden_sizes[1],
+            truncate=truncate,
+        )
+
         lstmbackward_layer = layers.LSTMLayer(
             preprocess_layer.h_outputs[::-1, :, :],
             hidden_sizes[1],
             hidden_sizes[0],
             truncate=truncate,
         )
+
+        lstmbackward2_layer = layers.LSTMLayer(
+            lstmbackward_layer.h_outputs,
+            hidden_sizes[1],
+            hidden_sizes[1],
+            truncate=truncate,
+        )
+
         
         lstm_concat = TT.concatenate(
             [
-                lstmforward_layer.h_outputs,
-                lstmbackward_layer.h_outputs,
+                lstmforward2_layer.h_outputs,
+                lstmbackward2_layer.h_outputs,
             ],
             axis=2
         )
@@ -103,6 +118,8 @@ class FedLSTM(object):
             preprocess_layer,
             lstmbackward_layer,
             lstmforward_layer,
+            lstmbackward2_layer,
+            lstmforward2_layer,
             preoutput_layer,
             output_layer,
         ]
