@@ -10,6 +10,9 @@ from spacy.en import English
 import requests
 import pandas as pd
 import numpy as np
+import allen_utils
+
+logger = allen_utils.get_logger(__name__)
 
 class Interval(object):
 
@@ -87,24 +90,45 @@ class Vocab(object):
 
     def __init__(self):
 
-        self.current_count = -1
         self.vocab = {}
+        self.special_words = [
+            '$CARDINAL$',
+            '$DATE',
+            '$UNKNOWN$'
+        ]
 
-    def update_and_get_count(self, word):
+    def update_count(self, word):
 
         if word not in self.vocab:
-            self.current_count += 1
-            self.vocab[word] = self.current_count
-        return self.current_count
+            self.vocab[word] = 1
+        else:
+            self.vocab[word] += 1
+
+    def to_dict(self, min_count=5):
+
+        position_dict = {word: idx for idx, word in enumerate(self.special_words)}
+        counter = len(self.special_words)
+        for word, word_count in self.vocab.iteritems():
+            if word_count >= min_count:
+                position_dict[word] = counter
+                counter += 1
+
+        return position_dict
 
 class DataTransformer(object):
 
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, min_sentence_length):
 
         self.url = 'https://api.stlouisfed.org/fred/series/observations'
         self.data_dir = data_dir
+        self.min_sentence_length = min_sentence_length
+        self.replace_entities = {
+            'DATE': '$DATE$',
+            'CARDINAL': '$CARDINAL$'
+        }
 
-        self.vocab = set()
+        self.vocab = Vocab()
+        self.word_positions = None
 
         self.rates = None
         self.docs = None
@@ -122,6 +146,38 @@ class DataTransformer(object):
             self.rates['date'] = self.rates['date'].apply(lambda s: datetime.datetime.strptime(s, '%Y-%m-%d').date())
             self.rates.sort('date')
 
+    def build_vocab(self):
+
+        def process_doc(doc_path):
+            with open(doc_path, 'r') as f:
+                text = unidecode.unidecode(unicode(f.read().decode('iso-8859-1')))
+                text = ' '.join(text.split()).strip()
+            if len(text) > 0:
+                doc = nlp(unicode(text).lower())
+
+                for sent in doc.sents:
+                    if len(sent) > self.min_sentence_length:
+                        for token in doc:
+                            self.vocab.update_count(token.text)
+
+        file_re = re.compile(r'\d{8}')
+        nlp = English()
+
+        count = 0
+        for root, dirs, filenames in os.walk(self.data_dir):
+            for filename in filenames:
+                if file_re.search(filename):
+                    process_doc(os.path.join(root, filename))
+                    logger.info("Parsed %s", filename)
+                count += 1
+                if count > 10:
+                    break
+
+        self.word_positions = self.vocab.to_dict()
+
+        with open(os.path.join(self.data_dir, 'dictionary.json'), 'w') as f:
+            json.dump(self.word_positions, f, indent=2)
+
     def get_docs(self, min_sentence_length=8):
 
         def parse_doc(doc_path):
@@ -130,15 +186,21 @@ class DataTransformer(object):
                 text = ' '.join(text.split()).strip()
             if len(text) > 0:
                 date = datetime.datetime.strptime(date_re.search(doc_path).group(0), '%Y%m%d').date()
-                doc = nlp(unicode(text))
+                unicode_text = unicode(text).lower()
+                doc = nlp(unicode_text)
 
                 doc_as_ints = []
 
                 sentences = list(doc.sents)
+
+                ents_dict = {ent.text: self.replace_entities[ent.label_] for ent in doc.ents if ent.label_ in self.replace_entities.keys()}
+                for ent in ents_dict:
+                    unicode_text = unicode_text.replace(ent, ents_dict[ent])
+
                 for sent in sentences[1:]:
                     if len(sent) > min_sentence_length:
                         for token in doc:
-                            doc_as_ints.append(self.vocab.add(token.text))
+                            doc_as_ints.append(self.word_positions[token.text])
 
                 paired_doc = PairedDocAndRates(date, doc_as_ints, doc_path.find('minutes') > -1)
                 paired_doc.match_rates(self.rates)
@@ -155,6 +217,7 @@ class DataTransformer(object):
                 if file_re.search(filename):
                     parsed_doc = parse_doc(os.path.join(root, filename))
                     if parsed_doc:
+                        logger.info("Parsed %s", filename)
                         docs.append(parsed_doc)
 
         self.docs = docs
@@ -164,9 +227,13 @@ class DataTransformer(object):
         with open(os.path.join(self.data_dir, 'paired_data.json'), 'w') as f:
             json.dump([doc.to_dict() for doc in self.docs], f, indent=2, sort_keys=True)
 
+        with open(os.path.join(self.data_dir, 'dictionary.json'), 'w') as f:
+            json.dump([doc.to_dict() for doc in self.docs], f, indent=2, sort_keys=True)
+
 if __name__ == "__main__":
 
-    data_transformer = DataTransformer('data')
+    data_transformer = DataTransformer('data', min_sentence_length=8)
+    data_transformer.build_vocab()
     data_transformer.get_rates('51c09c6b8aa464671aa8ac96c76a8416')
     data_transformer.get_docs()
     data_transformer.save_output()
