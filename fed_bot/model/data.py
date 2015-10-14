@@ -163,15 +163,12 @@ class DataTransformer(object):
         file_re = re.compile(r'\d{8}')
         nlp = English()
 
-        count = 0
         for root, dirs, filenames in os.walk(self.data_dir):
             for filename in filenames:
                 if file_re.search(filename):
-                    process_doc(os.path.join(root, filename))
-                    logger.info("Parsed %s", filename)
-                count += 1
-                if count > 10:
-                    break
+                    filepath = os.path.join(root, filename)
+                    process_doc(filepath)
+                    logger.info("Built vocab from: %s", filepath)
 
         self.word_positions = self.vocab.to_dict()
 
@@ -215,9 +212,10 @@ class DataTransformer(object):
         for root, dirs, filenames in os.walk(self.data_dir):
             for filename in filenames:
                 if file_re.search(filename):
-                    parsed_doc = parse_doc(os.path.join(root, filename))
+                    filepath = os.path.join(root, filename)
+                    parsed_doc = parse_doc(filepath)
                     if parsed_doc:
-                        logger.info("Parsed %s", filename)
+                        logger.info("Parsed %s", filepath)
                         docs.append(parsed_doc)
 
         self.docs = docs
