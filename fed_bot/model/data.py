@@ -80,7 +80,7 @@ class PairedDocAndRates(object):
 
         return dict(
             date = self.date.strftime('%Y-%m-%d'),
-            vectors = self.vectors,
+            word_indexes = self.vectors,
             rates = self.rates,
             is_minutes = self.is_minutes,
             regime = self.regime
@@ -175,9 +175,6 @@ class DataTransformer(object):
 
         self.word_positions = self.vocab.to_dict()
 
-        with open(os.path.join(self.data_dir, 'dictionary.json'), 'w') as f:
-            json.dump(self.word_positions, f, indent=2)
-
     def get_docs(self, min_sentence_length=8):
 
         def parse_doc(doc_path):
@@ -200,7 +197,10 @@ class DataTransformer(object):
                 for sent in sentences[1:]:
                     if len(sent) > min_sentence_length:
                         for token in doc:
-                            doc_as_ints.append(self.word_positions[token.text])
+                            try:
+                                doc_as_ints.append(self.word_positions[token.text])
+                            except KeyError:
+                                doc_as_ints.append(self.word_positions['$UNKNOWN$'])
 
                 paired_doc = PairedDocAndRates(date, doc_as_ints, doc_path.find('minutes') > -1)
                 paired_doc.match_rates(self.rates)
@@ -228,7 +228,7 @@ class DataTransformer(object):
             json.dump([doc.to_dict() for doc in self.docs], f, indent=2, sort_keys=True)
 
         with open(os.path.join(self.data_dir, 'dictionary.json'), 'w') as f:
-            json.dump([doc.to_dict() for doc in self.docs], f, indent=2, sort_keys=True)
+            json.dump(self.vocab.to_dict(), f, indent=2, sort_keys=True)
 
 if __name__ == "__main__":
 
