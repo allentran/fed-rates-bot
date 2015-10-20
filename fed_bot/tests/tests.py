@@ -16,16 +16,22 @@ def model_test():
     T = 20
 
     test_ob = dict(
-        word_vectors=np.random.standard_normal((T, n_batch, 300)).astype('float32'),
+        word_vectors=np.random.randint(0, 10, size=(T, n_batch)).astype('int32'),
         rates=np.ones((n_batch, 3)).astype('float32'),
         max_mask=np.ones((T, n_batch)).astype('float32'),
         regimes=np.ones(n_batch).astype('int32'),
         doc_types=np.ones(n_batch).astype('int32')
     )
 
+    word_embeddings = np.random.normal(0, 1, size=(10, 300)).astype('float32')
+
+    assert word_embeddings[test_ob['word_vectors']].shape == (T, n_batch, 300)
+
     model = lstm.FedLSTM(
+        vocab_size=10,
         hidden_sizes=[10, 10, 10, 10],
-        n_mixtures=2
+        n_mixtures=2,
+        word_vectors=word_embeddings
     )
 
     model.get_cost_and_update(

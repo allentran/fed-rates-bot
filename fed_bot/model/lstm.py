@@ -1,5 +1,6 @@
 __author__ = 'allentran'
 
+import numpy as np
 import theano
 import theano.tensor as TT
 from theano_layers import layers
@@ -17,13 +18,21 @@ class FedLSTM(object):
             l2_penalty=0,
             n_regimes=6,
             regime_size=5,
-            doctype_size=5):
+            doctype_size=5,
+            vocab_size=10,
+            word_vectors=None,
+    ):
 
-        self.inputs = TT.tensor3() # n_words x minibatch x features
-        self.outputs = TT.matrix() # minibatch x n_target_rates
+        self.inputs_indexes = TT.imatrix() # n_words x minibatch
         self.regimes = TT.ivector() # minibatch
         self.doc_types = TT.ivector() # minibatch
+
+        self.unique_inputs = TT.ivector()
+        self.unique_regimes = TT.ivector()
+        self.unique_doc_types = TT.ivector()
+
         self.mask = TT.matrix() # n_words x minibatch
+        self.outputs = TT.matrix() # minibatch x n_target_rates
 
         regime_layer = layers.VectorEmbeddings(
             n_vectors=n_regimes,
@@ -35,11 +44,19 @@ class FedLSTM(object):
             size=doctype_size
         )
 
+        word_vectors_layer = layers.VectorEmbeddings(
+            n_vectors=vocab_size,
+            size=input_size
+        )
+        word_vectors_layer.V.set_value(word_vectors)
+
+
         regime_vectors = regime_layer.V[self.regimes]
         doctype_vectors = doctype_layer.V[self.doc_types]
+        inputs = word_vectors_layer.V[self.inputs_indexes]
 
         preprocess_layer = layers.DenseLayer(
-            self.inputs,
+            inputs,
             input_size,
             hidden_sizes[0],
             activation=TT.nnet.relu
@@ -127,35 +144,49 @@ class FedLSTM(object):
         l2_cost = 0
         for layer in self.layers:
             l2_cost += l2_penalty * layer.get_l2sum()
-        l2_cost += l2_penalty * regime_layer.get_l2sum()
-        l2_cost += l2_penalty * doctype_layer.get_l2sum()
+        l2_cost += l2_penalty * regime_layer.get_l2sum(self.regimes)
+        l2_cost += l2_penalty * doctype_layer.get_l2sum(self.doc_types)
+        l2_cost += l2_penalty * word_vectors_layer.get_l2sum(self.inputs_indexes)
 
         self.loss_function = mixture_density_layer.nll_cost.sum()
 
         updates = []
         for layer in self.layers:
             updates += layer.get_updates(self.loss_function + l2_cost)
-        updates += regime_layer.get_updates(self.loss_function + l2_cost, self.regimes)
-        updates += doctype_layer.get_updates(self.loss_function + l2_cost, self.doc_types)
+        updates += regime_layer.get_updates(self.loss_function + l2_cost, self.unique_regimes)
+        updates += doctype_layer.get_updates(self.loss_function + l2_cost, self.unique_doc_types)
+        updates += word_vectors_layer.get_updates(self.loss_function + l2_cost, self.unique_inputs)
 
         self._cost_and_update = theano.function(
-            inputs=[self.inputs, self.outputs, self.mask, self.regimes, self.doc_types],
+            inputs=[
+                self.inputs_indexes,
+                self.outputs,
+                self.mask,
+                self.regimes,
+                self.doc_types,
+                self.unique_inputs,
+                self.unique_doc_types,
+                self.unique_regimes
+            ],
             outputs=self.loss_function,
             updates=updates
         )
 
         self._cost= theano.function(
-            inputs=[self.inputs, self.outputs, self.mask, self.regimes, self.doc_types],
+            inputs=[self.inputs_indexes, self.outputs, self.mask, self.regimes, self.doc_types],
             outputs=self.loss_function,
         )
 
         self._output = theano.function(
-            inputs=[self.inputs, self.mask, self.regimes, self.doc_types],
+            inputs=[self.inputs_indexes, self.mask, self.regimes, self.doc_types],
             outputs=mixture_density_layer.outputs,
         )
 
     def get_cost_and_update(self, inputs, outputs, mask, regimes, doctypes):
-        return self._cost_and_update(inputs, outputs, mask, regimes, doctypes)
+        u_inputs = np.unique(inputs).flatten()
+        u_regimes = np.unique(regimes).flatten()
+        u_docs = np.unique(doctypes).flatten()
+        return self._cost_and_update(inputs, outputs, mask, regimes, doctypes, u_inputs, u_docs, u_regimes)
 
     def get_cost(self, inputs, outputs, mask, regimes, doctypes):
         return self._cost(inputs, outputs, mask, regimes, doctypes)
