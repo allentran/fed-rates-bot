@@ -9,7 +9,7 @@ import numpy as np
 
 import lstm
 
-def batch_and_load_data(data_path, batch_size=10, n_rates=3):
+def batch_and_load_data(data_path, batch_size=10, n_rates=3, max_tokens=None):
 
     def calc_target_rates(rates, days):
 
@@ -53,19 +53,37 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
             regimes=np.array(regimes).astype('int32'),
         )
 
+    def split_data(data_to_split, max_tokens=max_tokens):
+        splitted_data = []
+        for obs in data_to_split:
+            original_length = len(obs['word_indexes'])
+            if original_length > max_tokens:
+                for idx in xrange(original_length / max_tokens + 1):
+                    new_obs = dict(
+                        date=obs['date'],
+                        rates=obs['rates'],
+                        is_minutes=obs['is_minutes'],
+                        regime=obs['regime'],
+                        word_indexes=obs['word_indexes'][max_tokens * idx:min(max_tokens * (idx + 1), original_length)]
+                    )
+                    splitted_data.append(new_obs)
+        return splitted_data
+
     with open(data_path, 'r') as json_file:
         paired_data = json.load(json_file)
 
     paired_data = [obs for obs in paired_data if '0' in obs['rates'] and len(obs['rates'].keys()) > 1]
-    for data in paired_data:
+    splitted_data = split_data(paired_data)
+    random.shuffle(splitted_data)
+    for data in splitted_data:
         data['word_indexes'] = np.array(data['word_indexes'])
 
     batched_data = []
-    paired_data = sorted(paired_data, key=lambda obs: obs['word_indexes'].shape[0])
+    splitted_data = sorted(splitted_data, key=lambda obs: obs['word_indexes'].shape[0])
 
-    for start_idx in xrange(0, len(paired_data), batch_size):
-        end_idx = min([start_idx + batch_size, len(paired_data)])
-        batched_data.append(merge(paired_data[start_idx: end_idx]))
+    for start_idx in xrange(0, len(splitted_data), batch_size):
+        end_idx = min([start_idx + batch_size, len(splitted_data)])
+        batched_data.append(merge(splitted_data[start_idx: end_idx]))
 
     return batched_data
 
@@ -90,10 +108,10 @@ def train(data_path, vocab_path):
     logger = allen_utils.get_logger(__name__)
 
     n_epochs = 200
-    batch_size = 32
+    batch_size = 5
     test_frac = 0.2
 
-    batched_data = batch_and_load_data(data_path, batch_size=batch_size)
+    batched_data = batch_and_load_data(data_path, batch_size=batch_size, max_tokens=50000)
     random.shuffle(batched_data)
 
     word_embeddings = build_wordvectors(vocab_path)
@@ -107,6 +125,7 @@ def train(data_path, vocab_path):
         l2_penalty=1e-4,
         n_mixtures=2,
         truncate=100,
+        vocab_size=word_embeddings.shape[0],
         word_vectors=word_embeddings
     )
 
