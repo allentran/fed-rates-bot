@@ -26,19 +26,19 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
 
     def merge(data_to_batch):
 
-        max_length = max([len(obs['vectors']) for obs in data_to_batch])
+        max_length = max([len(obs['word_indexes']) for obs in data_to_batch])
         batch_size = len(data_to_batch)
 
         target_rates = np.zeros((batch_size, n_rates))
-        word_vectors = np.zeros((max_length, batch_size, data_to_batch[0]['vectors'].shape[1]))
+        word_vectors = np.zeros((max_length, batch_size))
         max_mask = np.zeros((max_length, batch_size))
         regimes = np.zeros(batch_size)
         doc_types = np.zeros(batch_size)
         for data_idx in xrange(batch_size):
             obs = data_to_batch[data_idx]
-            vectors = obs['vectors']
+            vectors = obs['word_indexes']
             length = vectors.shape[0]
-            word_vectors[0:length, data_idx, :] = vectors
+            word_vectors[0:length, data_idx] = vectors
             max_mask[0:length, data_idx] = 1
             target_rates[data_idx, :] = calc_target_rates(obs['rates'], days=['30', '90', '180'])
             if obs['is_minutes']:
@@ -46,7 +46,7 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
             regimes[data_idx] = obs['regime']
 
         return dict(
-            word_vectors=word_vectors.astype('float32'),
+            word_vectors=word_vectors.astype('int32'),
             max_mask=max_mask.astype('float32'),
             rates=target_rates.astype('float32'),
             doc_types=np.array(doc_types).astype('int32'),
@@ -58,10 +58,10 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
 
     paired_data = [obs for obs in paired_data if '0' in obs['rates'] and len(obs['rates'].keys()) > 1]
     for data in paired_data:
-        data['vectors'] = np.array(data['vectors'])
+        data['word_indexes'] = np.array(data['word_indexes'])
 
     batched_data = []
-    paired_data = sorted(paired_data, key=lambda obs: obs['vectors'].shape[0])
+    paired_data = sorted(paired_data, key=lambda obs: obs['word_indexes'].shape[0])
 
     for start_idx in xrange(0, len(paired_data), batch_size):
         end_idx = min([start_idx + batch_size, len(paired_data)])
@@ -80,9 +80,9 @@ def build_wordvectors(vocab_dict_path):
     for token, position in vocab.iteritems():
         vector = nlp(unicode(token)).repvec
         if len(vector[vector != 0]) > 0:
-            word_vectors[position] = vector
+            word_vectors[position, :] = vector
 
-    return word_vectors
+    return word_vectors.astype('float32')
 
 
 def train(data_path, vocab_path):
@@ -141,4 +141,4 @@ def train(data_path, vocab_path):
             logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
 
 if __name__ == "__main__":
-    train('/storage/allen/fedbot/data/paired_data.json', '/storage/allen/fedbot/data/vocab.json')
+    train('data/paired_data.json', 'data/dictionary.json')
