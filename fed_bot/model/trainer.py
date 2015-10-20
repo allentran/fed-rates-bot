@@ -1,9 +1,9 @@
 __author__ = 'allentran'
 
 import random
-import logging
 import json
 
+from spacy.en import English
 import allen_utils
 import numpy as np
 
@@ -69,8 +69,25 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3):
 
     return batched_data
 
+def build_wordvectors(vocab_dict_path):
 
-def train(data_path, logger):
+    with open(vocab_dict_path, 'r') as json_f:
+        vocab = json.load(json_f)
+
+    word_vectors = np.random.normal(size=(len(vocab), 300))
+    nlp = English()
+
+    for token, position in vocab.iteritems():
+        vector = nlp(unicode(token)).repvec
+        if len(vector[vector != 0]) > 0:
+            word_vectors[position] = vector
+
+    return word_vectors
+
+
+def train(data_path, vocab_path):
+
+    logger = allen_utils.get_logger(__name__)
 
     n_epochs = 200
     batch_size = 32
@@ -78,6 +95,8 @@ def train(data_path, logger):
 
     batched_data = batch_and_load_data(data_path, batch_size=batch_size)
     random.shuffle(batched_data)
+
+    word_embeddings = build_wordvectors(vocab_path)
 
     test_idx = int(round(len(batched_data) * test_frac))
     test_data = batched_data[:test_idx]
@@ -87,7 +106,8 @@ def train(data_path, logger):
         hidden_sizes=[500, 400, 300, 100],
         l2_penalty=1e-4,
         n_mixtures=2,
-        truncate=100
+        truncate=100,
+        word_vectors=word_embeddings
     )
 
     for epoch_idx in xrange(n_epochs):
@@ -121,5 +141,4 @@ def train(data_path, logger):
             logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
 
 if __name__ == "__main__":
-    logger = allen_utils.get_logger(__name__)
-    train('/storage/allen/fedbot/data/paired_data.json', logger)
+    train('/storage/allen/fedbot/data/paired_data.json', '/storage/allen/fedbot/data/vocab.json')
