@@ -196,7 +196,7 @@ class DataTransformer(object):
                 for sent in sentences[1:]:
                     if len(sent) > min_sentence_length:
                         sentence_as_idxes = []
-                        for token in doc:
+                        for token in sent:
                             try:
                                 sentence_as_idxes.append(self.word_positions[token.text])
                             except KeyError:
