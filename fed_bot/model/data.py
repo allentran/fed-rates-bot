@@ -93,7 +93,7 @@ class Vocab(object):
         self.vocab = {}
         self.special_words = [
             '$CARDINAL$',
-            '$DATE',
+            '$DATE$',
             '$UNKNOWN$'
         ]
 
