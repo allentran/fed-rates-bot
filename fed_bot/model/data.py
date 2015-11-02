@@ -45,10 +45,10 @@ def find_regime(date):
 
 class PairedDocAndRates(object):
 
-    def __init__(self, date, vectors, is_minutes):
+    def __init__(self, date, sentences, is_minutes):
 
         self.date = date
-        self.vectors = vectors
+        self.sentences = sentences
         self.is_minutes = is_minutes
         self.rates = None
         self.regime = find_regime(date)
@@ -80,7 +80,7 @@ class PairedDocAndRates(object):
 
         return dict(
             date = self.date.strftime('%Y-%m-%d'),
-            word_indexes = self.vectors,
+            sentences = self.sentences,
             rates = self.rates,
             is_minutes = self.is_minutes,
             regime = self.regime
@@ -183,7 +183,7 @@ class DataTransformer(object):
                 unicode_text = unicode(text).lower()
                 doc = nlp(unicode_text)
 
-                doc_as_ints = []
+                doc_sents = []
 
                 sentences = list(doc.sents)
 
@@ -193,13 +193,15 @@ class DataTransformer(object):
 
                 for sent in sentences[1:]:
                     if len(sent) > min_sentence_length:
+                        sentence_as_idxes = []
                         for token in doc:
                             try:
-                                doc_as_ints.append(self.word_positions[token.text])
+                                sentence_as_idxes.append(self.word_positions[token.text])
                             except KeyError:
-                                doc_as_ints.append(self.word_positions['$UNKNOWN$'])
+                                sentence_as_idxes.append(self.word_positions['$UNKNOWN$'])
+                        doc_sents.append(sentence_as_idxes)
 
-                paired_doc = PairedDocAndRates(date, doc_as_ints, doc_path.find('minutes') > -1)
+                paired_doc = PairedDocAndRates(date, doc_sents, doc_path.find('minutes') > -1)
                 paired_doc.match_rates(self.rates)
 
                 return paired_doc
