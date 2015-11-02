@@ -154,11 +154,13 @@ class DataTransformer(object):
                 text = ' '.join(text.split()).strip()
             if len(text) > 0:
                 doc = nlp(unicode(text).lower())
-
+                found_words = set()
                 for sent in doc.sents:
                     if len(sent) > self.min_sentence_length:
                         for token in doc:
-                            self.vocab.update_count(token.text)
+                            if token.text not in found_words:
+                                self.vocab.update_count(token.text)
+                                found_words.add(token.text)
 
         file_re = re.compile(r'\d{8}')
         nlp = English()
