@@ -176,6 +176,12 @@ class DataTransformer(object):
 
     def get_docs(self, min_sentence_length=8):
 
+        regexes = [
+            (re.compile(r'\d{4}'), '$DATE$'),
+            (re.compile(r'\d+[\.,]*\d+'), '$CARDINAL$')
+        ]
+
+
         def parse_doc(doc_path):
             with open(doc_path, 'r') as f:
                 text = unidecode.unidecode(unicode(f.read().decode('iso-8859-1')))
@@ -197,10 +203,17 @@ class DataTransformer(object):
                     if len(sent) > min_sentence_length:
                         sentence_as_idxes = []
                         for token in sent:
-                            try:
-                                sentence_as_idxes.append(self.word_positions[token.text])
-                            except KeyError:
-                                sentence_as_idxes.append(self.word_positions['$UNKNOWN$'])
+                            skip = False
+                            for regex in regexes:
+                                match = regex[0].search(token.text)
+                                if match:
+                                    sentence_as_idxes.append(self.word_positions[regex[1]])
+                                    skip = True
+                            if skip:
+                                try:
+                                    sentence_as_idxes.append(self.word_positions[token.text])
+                                except KeyError:
+                                    sentence_as_idxes.append(self.word_positions['$UNKNOWN$'])
                         doc_sents.append(sentence_as_idxes)
 
                 paired_doc = PairedDocAndRates(date, doc_sents, doc_path.find('minutes') > -1)
