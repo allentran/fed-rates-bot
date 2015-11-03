@@ -127,6 +127,15 @@ class DataTransformer(object):
             'CARDINAL': '$CARDINAL$'
         }
 
+
+        self.nlp = English()
+
+        # custom token replacement
+        self.regexes = [
+            (re.compile(r'\d{4}'), '$DATE$'),
+            (re.compile(r'\d+[\.,]*\d+'), '$CARDINAL$')
+        ]
+
         self.vocab = Vocab()
         self.word_positions = None
 
@@ -153,7 +162,8 @@ class DataTransformer(object):
                 text = unidecode.unidecode(unicode(f.read().decode('iso-8859-1')))
                 text = ' '.join(text.split()).strip()
             if len(text) > 0:
-                doc = nlp(unicode(text).lower())
+                stripped_text = self.strip_text(text)
+                doc = self.nlp(unicode(stripped_text))
                 found_words = set()
                 for sent in doc.sents:
                     if len(sent) > self.min_sentence_length:
@@ -163,7 +173,6 @@ class DataTransformer(object):
                                 found_words.add(token.text)
 
         file_re = re.compile(r'\d{8}')
-        nlp = English()
 
         for root, dirs, filenames in os.walk(self.data_dir):
             for filename in filenames:
@@ -174,13 +183,22 @@ class DataTransformer(object):
 
         self.word_positions = self.vocab.to_dict()
 
+    def strip_text(self, text):
+
+        doc = self.nlp(unicode(text).lower())
+
+        # spacy token replacement
+        ents_dict = {ent.text: self.replace_entities[ent.label_] for ent in doc.ents if ent.label_ in self.replace_entities.keys()}
+        for ent in ents_dict:
+            text = text.replace(ent, ents_dict[ent])
+
+        for regex, replacement_token in self.regexes:
+            text = regex.sub(replacement_token, text)
+
+        return text
+
     def get_docs(self, min_sentence_length=8):
 
-        # custom token replacement
-        regexes = [
-            (re.compile(r'\d{4}'), '$DATE$'),
-            (re.compile(r'\d+[\.,]*\d+'), '$CARDINAL$')
-        ]
 
 
         def parse_doc(doc_path):
@@ -189,18 +207,9 @@ class DataTransformer(object):
                 text = ' '.join(text.split()).strip()
             if len(text) > 0:
                 date = datetime.datetime.strptime(date_re.search(doc_path).group(0), '%Y%m%d').date()
-                unicode_text = unicode(text).lower()
-                doc = nlp(unicode_text)
+                stripped_text = self.strip_text(text)
 
-                # spacy token replacement
-                ents_dict = {ent.text: self.replace_entities[ent.label_] for ent in doc.ents if ent.label_ in self.replace_entities.keys()}
-                for ent in ents_dict:
-                    unicode_text = unicode_text.replace(ent, ents_dict[ent])
-
-                for regex, replacement_token in regexes:
-                    unicode_text = regex.sub(replacement_token, unicode_text)
-
-                doc = nlp(unicode_text)
+                doc = self.nlp(unicode(stripped_text))
                 sentences = list(doc.sents)
                 doc_sents = []
 
@@ -221,7 +230,6 @@ class DataTransformer(object):
 
         date_re = re.compile(r'\d{8}')
         file_re = re.compile(r'\d{8}')
-        nlp = English()
 
         docs = []
         for root, dirs, filenames in os.walk(self.data_dir):

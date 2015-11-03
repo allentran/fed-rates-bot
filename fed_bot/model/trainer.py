@@ -9,7 +9,7 @@ import numpy as np
 
 import lstm
 
-def batch_and_load_data(data_path, batch_size=10, n_rates=3, max_tokens=None):
+def load_data(data_path, n_rates=3):
 
     def calc_target_rates(rates, days):
 
@@ -24,68 +24,42 @@ def batch_and_load_data(data_path, batch_size=10, n_rates=3, max_tokens=None):
 
         return np.array(target_rates)
 
-    def merge(data_to_batch):
+    def transform(obs):
 
-        max_length = max([len(obs['word_indexes']) for obs in data_to_batch])
-        batch_size = len(data_to_batch)
+        max_length = max([len(sentence) for sentence in obs['sentences']])
+        n_sentences = len(obs['sentences'])
 
-        target_rates = np.zeros((batch_size, n_rates))
-        word_vectors = np.zeros((max_length, batch_size))
-        max_mask = np.zeros((max_length, batch_size))
-        regimes = np.zeros(batch_size)
-        doc_types = np.zeros(batch_size)
-        for data_idx in xrange(batch_size):
-            obs = data_to_batch[data_idx]
-            vectors = obs['word_indexes']
-            length = vectors.shape[0]
-            word_vectors[0:length, data_idx] = vectors
-            max_mask[0:length, data_idx] = 1
-            target_rates[data_idx, :] = calc_target_rates(obs['rates'], days=['30', '90', '180'])
-            if obs['is_minutes']:
-                doc_types[data_idx] = 1
-            regimes[data_idx] = obs['regime']
+        target_rates = calc_target_rates(obs['rates'], days=['30', '90', '180'])
+        word_vectors = np.zeros((max_length, n_sentences))
+        max_mask = -1e5 * np.ones((max_length, n_sentences))
+        doc_types = 1 if obs['is_minutes'] else 0
+
+        for sent_idx, sentence in enumerate(obs['sentences']):
+            length = len(sentence)
+            word_vectors[0:length, sent_idx] = sentence
+            max_mask[0:length, sent_idx] = 1
 
         return dict(
             word_vectors=word_vectors.astype('int32'),
             max_mask=max_mask.astype('float32'),
             rates=target_rates.astype('float32'),
-            doc_types=np.array(doc_types).astype('int32'),
-            regimes=np.array(regimes).astype('int32'),
+            doc_types=np.int32(doc_types),
+            regimes=np.int32(obs['regime']),
         )
-
-    def split_data(data_to_split, max_tokens=max_tokens):
-        splitted_data = []
-        for obs in data_to_split:
-            original_length = len(obs['word_indexes'])
-            if original_length > max_tokens:
-                for idx in xrange(original_length / max_tokens + 1):
-                    new_obs = dict(
-                        date=obs['date'],
-                        rates=obs['rates'],
-                        is_minutes=obs['is_minutes'],
-                        regime=obs['regime'],
-                        word_indexes=obs['word_indexes'][max_tokens * idx:min(max_tokens * (idx + 1), original_length)]
-                    )
-                    splitted_data.append(new_obs)
-        return splitted_data
 
     with open(data_path, 'r') as json_file:
         paired_data = json.load(json_file)
 
     paired_data = [obs for obs in paired_data if '0' in obs['rates'] and len(obs['rates'].keys()) > 1]
-    splitted_data = split_data(paired_data)
-    random.shuffle(splitted_data)
-    for data in splitted_data:
-        data['word_indexes'] = np.array(data['word_indexes'])
+    random.shuffle(paired_data)
+    for data in paired_data:
+        data['sentences'] = np.array(data['sentences'])
 
-    batched_data = []
-    splitted_data = sorted(splitted_data, key=lambda obs: obs['word_indexes'].shape[0])
+    transformed_data = []
+    for obs in paired_data:
+        transformed_data.append(transform(obs))
 
-    for start_idx in xrange(0, len(splitted_data), batch_size):
-        end_idx = min([start_idx + batch_size, len(splitted_data)])
-        batched_data.append(merge(splitted_data[start_idx: end_idx]))
-
-    return batched_data
+    return transformed_data
 
 def build_wordvectors(vocab_dict_path):
 
@@ -96,6 +70,9 @@ def build_wordvectors(vocab_dict_path):
     nlp = English()
 
     for token, position in vocab.iteritems():
+        import IPython
+        IPython.embed()
+        assert False
         vector = nlp(unicode(token)).repvec
         if len(vector[vector != 0]) > 0:
             word_vectors[position, :] = vector
@@ -108,17 +85,15 @@ def train(data_path, vocab_path):
     logger = allen_utils.get_logger(__name__)
 
     n_epochs = 200
-    batch_size = 5
     test_frac = 0.2
 
-    batched_data = batch_and_load_data(data_path, batch_size=batch_size, max_tokens=50000)
-    random.shuffle(batched_data)
+    data = load_data(data_path)
 
     word_embeddings = build_wordvectors(vocab_path)
 
-    test_idx = int(round(len(batched_data) * test_frac))
-    test_data = batched_data[:test_idx]
-    train_data = batched_data[test_idx:]
+    test_idx = int(round(len(data) * test_frac))
+    test_data = data[:test_idx]
+    train_data = data[test_idx:]
 
     model = lstm.FedLSTM(
         hidden_sizes=[500, 400, 300, 100],
@@ -140,6 +115,9 @@ def train(data_path, vocab_path):
                 obs['regimes'],
                 obs['doc_types']
             )
+            import IPython
+            IPython.embed()
+            assert False
             cost /= obs['word_vectors'].shape[1]
             train_cost += cost
 
