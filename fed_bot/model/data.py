@@ -162,15 +162,14 @@ class DataTransformer(object):
                 text = unidecode.unidecode(unicode(f.read().decode('iso-8859-1')))
                 text = ' '.join(text.split()).strip()
             if len(text) > 0:
-                stripped_text = self.strip_text(text)
-                doc = self.nlp(unicode(stripped_text))
-                found_words = set()
+                doc = self.nlp(unicode(text.lower()))
+                doc_words = set()
                 for sent in doc.sents:
                     if len(sent) > self.min_sentence_length:
                         for token in doc:
-                            if token.text not in found_words:
+                            if token.text not in doc_words:
                                 self.vocab.update_count(token.text)
-                                found_words.add(token.text)
+                                doc_words.add(token.text)
 
         file_re = re.compile(r'\d{8}')
 
@@ -187,19 +186,14 @@ class DataTransformer(object):
 
         doc = self.nlp(unicode(text).lower())
 
-        # spacy token replacement
+        # spacy entity replacement
         ents_dict = {ent.text: self.replace_entities[ent.label_] for ent in doc.ents if ent.label_ in self.replace_entities.keys()}
         for ent in ents_dict:
             text = text.replace(ent, ents_dict[ent])
 
-        for regex, replacement_token in self.regexes:
-            text = regex.sub(replacement_token, text)
-
         return text
 
     def get_docs(self, min_sentence_length=8):
-
-
 
         def parse_doc(doc_path):
             with open(doc_path, 'r') as f:
@@ -217,10 +211,17 @@ class DataTransformer(object):
                     if len(sent) > min_sentence_length:
                         sentence_as_idxes = []
                         for token in sent:
-                            try:
-                                sentence_as_idxes.append(self.word_positions[token.text])
-                            except KeyError:
-                                sentence_as_idxes.append(self.word_positions['$UNKNOWN$'])
+                            skip = False
+                            for regex, replacement_token in self.regexes:
+                                match = regex.match(token.text)
+                                if match:
+                                    sentence_as_idxes.append(self.word_positions[replacement_token])
+                                    skip = True
+                            if not skip:
+                                try:
+                                    sentence_as_idxes.append(self.word_positions[token.text])
+                                except KeyError:
+                                    sentence_as_idxes.append(self.word_positions['$UNKNOWN$'])
                         doc_sents.append(sentence_as_idxes)
 
                 paired_doc = PairedDocAndRates(date, doc_sents, doc_path.find('minutes') > -1)
