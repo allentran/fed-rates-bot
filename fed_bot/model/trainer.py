@@ -100,7 +100,6 @@ def train(data_path, vocab_path):
         hidden_sizes=[500, 400, 300, 100],
         l2_penalty=1e-4,
         n_mixtures=2,
-        truncate=100,
         vocab_size=word_embeddings.shape[0],
         word_vectors=word_embeddings
     )
@@ -116,9 +115,6 @@ def train(data_path, vocab_path):
                 obs['regimes'],
                 obs['doc_types']
             )
-            import IPython
-            IPython.embed()
-            assert False
             cost /= obs['word_vectors'].shape[1]
             train_cost += cost
 
