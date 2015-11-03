@@ -76,7 +76,8 @@ class FedLSTM(object):
         )
 
         # max within a sentence (pick out phrases), then max over sentences
-        max_pooled_words = (lstmforward2_layer.h_outputs * self.mask[:, :, None]).max(axis=0).max(axis=1)
+        # note first max eliminates first axis, so 2nd max(axis=0) kills 2nd axis
+        max_pooled_words = (lstmforward2_layer.h_outputs * self.mask[:, :, None]).max(axis=0).max(axis=0)
         words_and_context = TT.concatenate(
             [
                 max_pooled_words,
