@@ -23,16 +23,16 @@ class FedLSTM(object):
             word_vectors=None,
     ):
 
-        self.inputs_indexes = TT.imatrix() # n_words x minibatch
-        self.regimes = TT.ivector() # minibatch
-        self.doc_types = TT.ivector() # minibatch
+        self.inputs_indexes = TT.imatrix() # n_words x n_sentences
+        self.regimes = TT.iscalar() # minibatch
+        self.doc_types = TT.iscalar() # minibatch
 
         self.unique_inputs = TT.ivector()
         self.unique_regimes = TT.ivector()
         self.unique_doc_types = TT.ivector()
 
-        self.mask = TT.matrix() # n_words x minibatch
-        self.outputs = TT.matrix() # minibatch x n_target_rates
+        self.mask = TT.matrix() # n_words x n_sentences
+        self.outputs = TT.vector() # n_target_rates
 
         regime_layer = layers.VectorEmbeddings(
             n_vectors=n_regimes,
@@ -49,7 +49,6 @@ class FedLSTM(object):
             size=input_size
         )
         word_vectors_layer.V.set_value(word_vectors)
-
 
         regime_vectors = regime_layer.V[self.regimes]
         doctype_vectors = doctype_layer.V[self.doc_types]
@@ -76,42 +75,19 @@ class FedLSTM(object):
             truncate=truncate,
         )
 
-        lstmbackward_layer = layers.LSTMLayer(
-            preprocess_layer.h_outputs[::-1, :, :],
-            hidden_sizes[1],
-            hidden_sizes[0],
-            truncate=truncate,
-        )
-
-        lstmbackward2_layer = layers.LSTMLayer(
-            lstmbackward_layer.h_outputs,
-            hidden_sizes[1],
-            hidden_sizes[1],
-            truncate=truncate,
-        )
-
-        
-        lstm_concat = TT.concatenate(
-            [
-                lstmforward2_layer.h_outputs,
-                lstmbackward2_layer.h_outputs,
-            ],
-            axis=2
-        )
-
-        max_pooled_words = (lstm_concat * self.mask[:, :, None]).max(axis=0)
+        # max within a sentence (pick out phrases), then max over sentences
+        max_pooled_words = (lstmforward2_layer.h_outputs * self.mask[:, :, None]).max(axis=0).max(axis=1)
         words_and_context = TT.concatenate(
             [
                 max_pooled_words,
                 regime_vectors,
                 doctype_vectors
             ],
-            axis=1
         )
 
         preoutput_layer = layers.DenseLayer(
             words_and_context,
-            hidden_sizes[1] * 2 + doctype_size + regime_size,
+            hidden_sizes[1] + doctype_size + regime_size,
             hidden_sizes[2],
             normalize_axis=0,
             feature_axis=1,
@@ -125,17 +101,15 @@ class FedLSTM(object):
         )
 
         mixture_density_layer = layers.MixtureDensityLayer(
-            output_layer.h_outputs[None, :, :],
-            self.outputs[None, :, :],
+            output_layer.h_outputs[None, None, :],
+            self.outputs[None, None, :],
             target_size=output_size,
             n_mixtures=n_mixtures
         )
 
         self.layers = [
             preprocess_layer,
-            lstmbackward_layer,
             lstmforward_layer,
-            lstmbackward2_layer,
             lstmforward2_layer,
             preoutput_layer,
             output_layer,
