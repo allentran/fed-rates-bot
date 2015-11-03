@@ -12,26 +12,31 @@ def scraper_test():
 
 def model_test():
 
-    n_sentences = 10
-    T = 20
+    n_sentences = 6
+    T = 21
+    vocab_size=55
+    word_vector_size=111
 
     test_ob = dict(
-        word_vectors=np.random.randint(0, 10, size=(T, n_sentences)).astype('int32'),
+        word_vectors=np.random.randint(0, vocab_size, size=(T, n_sentences)).astype('int32'),
         rates=np.ones(3).astype('float32'),
         max_mask=np.ones((T, n_sentences)).astype('float32'),
         regimes=np.int32(1),
         doc_types=np.int32(1).astype('int32')
     )
 
-    word_embeddings = np.random.normal(0, 1, size=(10, 300)).astype('float32')
+    word_embeddings = np.random.normal(0, 1, size=(vocab_size, word_vector_size)).astype('float32')
 
-    assert word_embeddings[test_ob['word_vectors']].shape == (T, n_sentences, 300)
+    assert word_embeddings[test_ob['word_vectors']].shape == (T, n_sentences, word_vector_size)
 
     model = lstm.FedLSTM(
-        vocab_size=10,
-        hidden_sizes=[10, 10, 10, 10],
+        vocab_size=vocab_size,
+        hidden_sizes=[10, 20, 30, 40],
         n_mixtures=2,
-        word_vectors=word_embeddings
+        word_vectors=word_embeddings,
+        doctype_size=7,
+        regime_size=4,
+        input_size=word_vector_size
     )
 
     model.get_cost_and_update(
