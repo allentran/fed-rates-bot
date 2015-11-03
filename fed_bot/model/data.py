@@ -176,6 +176,7 @@ class DataTransformer(object):
 
     def get_docs(self, min_sentence_length=8):
 
+        # custom token replacement
         regexes = [
             (re.compile(r'\d{4}'), '$DATE$'),
             (re.compile(r'\d+[\.,]*\d+'), '$CARDINAL$')
@@ -191,29 +192,26 @@ class DataTransformer(object):
                 unicode_text = unicode(text).lower()
                 doc = nlp(unicode_text)
 
-                doc_sents = []
-
-                sentences = list(doc.sents)
-
+                # spacy token replacement
                 ents_dict = {ent.text: self.replace_entities[ent.label_] for ent in doc.ents if ent.label_ in self.replace_entities.keys()}
                 for ent in ents_dict:
                     unicode_text = unicode_text.replace(ent, ents_dict[ent])
+
+                for regex, replacement_token in regexes:
+                    unicode_text = regex.sub(replacement_token, unicode_text)
+
+                doc = nlp(unicode_text)
+                sentences = list(doc.sents)
+                doc_sents = []
 
                 for sent in sentences[1:]:
                     if len(sent) > min_sentence_length:
                         sentence_as_idxes = []
                         for token in sent:
-                            skip = False
-                            for regex in regexes:
-                                match = regex[0].search(token.text)
-                                if match:
-                                    sentence_as_idxes.append(self.word_positions[regex[1]])
-                                    skip = True
-                            if skip:
-                                try:
-                                    sentence_as_idxes.append(self.word_positions[token.text])
-                                except KeyError:
-                                    sentence_as_idxes.append(self.word_positions['$UNKNOWN$'])
+                            try:
+                                sentence_as_idxes.append(self.word_positions[token.text])
+                            except KeyError:
+                                sentence_as_idxes.append(self.word_positions['$UNKNOWN$'])
                         doc_sents.append(sentence_as_idxes)
 
                 paired_doc = PairedDocAndRates(date, doc_sents, doc_path.find('minutes') > -1)
