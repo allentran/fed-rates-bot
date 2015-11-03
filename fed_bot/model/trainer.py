@@ -9,6 +9,8 @@ import numpy as np
 
 import lstm
 
+logger = allen_utils.get_logger(__name__)
+
 def load_data(data_path, n_rates=3):
 
     def calc_target_rates(rates, days):
@@ -70,19 +72,18 @@ def build_wordvectors(vocab_dict_path):
     nlp = English()
 
     for token, position in vocab.iteritems():
-        import IPython
-        IPython.embed()
-        assert False
-        vector = nlp(unicode(token)).repvec
-        if len(vector[vector != 0]) > 0:
-            word_vectors[position, :] = vector
+        try:
+            vector = nlp(unicode(token))[0].repvec
+            if len(vector[vector != 0]) > 0:
+                word_vectors[position, :] = vector
+        except ValueError:
+            logger.info("No init vector for %s", token)
+
 
     return word_vectors.astype('float32')
 
 
 def train(data_path, vocab_path):
-
-    logger = allen_utils.get_logger(__name__)
 
     n_epochs = 200
     test_frac = 0.2
