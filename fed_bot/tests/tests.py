@@ -5,29 +5,25 @@ import numpy as np
 from ..scraper import Scraper
 from ..model import lstm
 
-def scraper_test():
-
-    scraper = Scraper()
-    assert len(scraper.get_docs(limit=1)) == 1
-
 def model_test():
 
     n_sentences = 6
     T = 21
+    n_batch = 7
     vocab_size=55
     word_vector_size=111
 
     test_ob = dict(
-        word_vectors=np.random.randint(0, vocab_size, size=(T, n_sentences)).astype('int32'),
-        rates=np.ones(3).astype('float32'),
-        max_mask=np.ones((T, n_sentences)).astype('float32'),
-        regimes=np.int32(1),
-        doc_types=np.int32(1).astype('int32')
+        word_vectors=np.random.randint(0, vocab_size, size=(T, n_sentences, n_batch)).astype('int32'),
+        rates=np.ones((n_batch, 3)).astype('float32'),
+        max_mask=np.ones((T, n_sentences, n_batch)).astype('float32'),
+        regimes=np.ones(n_batch).astype('int32'),
+        doc_types=np.ones(n_batch).astype('int32')
     )
 
     word_embeddings = np.random.normal(0, 1, size=(vocab_size, word_vector_size)).astype('float32')
 
-    assert word_embeddings[test_ob['word_vectors']].shape == (T, n_sentences, word_vector_size)
+    assert word_embeddings[test_ob['word_vectors']].shape == (T, n_sentences, n_batch, word_vector_size)
 
     model = lstm.FedLSTM(
         vocab_size=vocab_size,
@@ -46,3 +42,9 @@ def model_test():
         test_ob['regimes'],
         test_ob['doc_types']
     )
+
+def scraper_test():
+
+    scraper = Scraper()
+    assert len(scraper.get_docs(limit=1)) == 1
+
