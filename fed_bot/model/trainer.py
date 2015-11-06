@@ -11,7 +11,7 @@ import lstm
 
 logger = allen_utils.get_logger(__name__)
 
-def load_data(data_path, n_rates=3):
+def load_data(data_path, n_rates=3, batch_size=32):
 
     def calc_target_rates(rates, days):
 
@@ -24,29 +24,37 @@ def load_data(data_path, n_rates=3):
             else:
                 target_rates.append(mean_diff)
 
-        return np.array(target_rates)
+        return np.array(target_rates) / 100.0
 
-    def transform(obs):
+    def merge(data_to_batch, mask_value=-1e5):
 
-        max_length = max([len(sentence) for sentence in obs['sentences']])
-        n_sentences = len(obs['sentences'])
+        max_n_sentences = max([len(obs['sentences']) for obs in data_to_batch])
+        max_length = max([len(sentence) for obs in data_to_batch for sentence in obs['sentences']])
+        batch_size = len(data_to_batch)
 
-        target_rates = calc_target_rates(obs['rates'], days=['30', '90', '180'])
-        word_vectors = np.zeros((max_length, n_sentences))
-        max_mask = -1e5 * np.ones((max_length, n_sentences))
-        doc_types = 1 if obs['is_minutes'] else 0
-
-        for sent_idx, sentence in enumerate(obs['sentences']):
-            length = len(sentence)
-            word_vectors[0:length, sent_idx] = sentence
-            max_mask[0:length, sent_idx] = 1
+        target_rates = np.zeros((batch_size, n_rates))
+        word_vectors = np.zeros((max_length, max_n_sentences, batch_size))
+        max_mask = np.zeros((max_length, max_n_sentences, batch_size))
+        regimes = np.zeros(batch_size)
+        doc_types = np.zeros(batch_size)
+        for data_idx in xrange(batch_size):
+            obs = data_to_batch[data_idx]
+            sentences = obs['sentences']
+            for sentence_number, sentence in enumerate(sentences):
+                length = len(sentence)
+                word_vectors[0:length, sentence_number, data_idx] = sentence
+                max_mask[0:length, sentence_number, data_idx] = mask_value
+            target_rates[data_idx, :] = calc_target_rates(obs['rates'], days=['30', '90', '180'])
+            if obs['is_minutes']:
+                doc_types[data_idx] = 1
+            regimes[data_idx] = obs['regime']
 
         return dict(
             word_vectors=word_vectors.astype('int32'),
             max_mask=max_mask.astype('float32'),
             rates=target_rates.astype('float32'),
-            doc_types=np.int32(doc_types),
-            regimes=np.int32(obs['regime']),
+            doc_types=np.array(doc_types).astype('int32'),
+            regimes=np.array(regimes).astype('int32'),
         )
 
     with open(data_path, 'r') as json_file:
@@ -54,14 +62,15 @@ def load_data(data_path, n_rates=3):
 
     paired_data = [obs for obs in paired_data if '0' in obs['rates'] and len(obs['rates'].keys()) > 1]
     random.shuffle(paired_data)
-    for data in paired_data:
-        data['sentences'] = np.array(data['sentences'])
 
-    transformed_data = []
-    for obs in paired_data:
-        transformed_data.append(transform(obs))
+    batched_data = []
+    paired_data = sorted(paired_data, key=lambda obs: np.hstack(obs['sentences']).shape[0])
 
-    return transformed_data
+    for start_idx in xrange(0, len(paired_data), batch_size):
+        end_idx = min([start_idx + batch_size, len(paired_data)])
+        batched_data.append(merge(paired_data[start_idx: end_idx]))
+
+    return batched_data
 
 def build_wordvectors(vocab_dict_path):
 
@@ -108,6 +117,9 @@ def train(data_path, vocab_path):
         train_cost = 0
         random.shuffle(train_data)
         for obs in train_data:
+            import IPython
+            IPython.embed()
+            assert False
             cost = model.get_cost_and_update(
                 obs['word_vectors'],
                 obs['rates'],
@@ -115,7 +127,6 @@ def train(data_path, vocab_path):
                 obs['regimes'],
                 obs['doc_types']
             )
-            cost /= obs['word_vectors'].shape[1]
             train_cost += cost
 
         if epoch_idx % 5 == 0:
@@ -128,7 +139,6 @@ def train(data_path, vocab_path):
                         obs['regimes'],
                         obs['doc_types']
                 )
-                cost /= obs['word_vectors'].shape[1]
                 test_cost += cost
             test_cost /= len(test_data)
             train_cost /= len(train_data)
