@@ -97,7 +97,7 @@ def train(data_path, vocab_path):
     n_epochs = 200
     test_frac = 0.2
 
-    data = load_data(data_path)
+    data = load_data(data_path, batch_size=3)
 
     word_embeddings = build_wordvectors(vocab_path)
 
@@ -106,20 +106,18 @@ def train(data_path, vocab_path):
     train_data = data[test_idx:]
 
     model = lstm.FedLSTM(
-        hidden_sizes=[500, 400, 300, 100],
+        hidden_sizes=[256, 128, 128, 64],
         l2_penalty=1e-4,
         n_mixtures=2,
         vocab_size=word_embeddings.shape[0],
-        word_vectors=word_embeddings
+        word_vectors=word_embeddings,
+        truncate=100
     )
 
     for epoch_idx in xrange(n_epochs):
         train_cost = 0
         random.shuffle(train_data)
         for obs in train_data:
-            import IPython
-            IPython.embed()
-            assert False
             cost = model.get_cost_and_update(
                 obs['word_vectors'],
                 obs['rates'],
@@ -127,7 +125,7 @@ def train(data_path, vocab_path):
                 obs['regimes'],
                 obs['doc_types']
             )
-            train_cost += cost
+            train_cost += cost/obs['word_vectors'].shape[2]
 
         if epoch_idx % 5 == 0:
             test_cost = 0
@@ -139,7 +137,7 @@ def train(data_path, vocab_path):
                         obs['regimes'],
                         obs['doc_types']
                 )
-                test_cost += cost
+                test_cost += cost/obs['word_vectors'].shape[2]
             test_cost /= len(test_data)
             train_cost /= len(train_data)
             logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
