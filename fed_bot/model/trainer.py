@@ -118,26 +118,24 @@ def train(data_path, vocab_path):
         train_cost = 0
         random.shuffle(train_data)
         for obs in train_data:
-            cost = model.get_cost_and_update(
+            train_cost += model.get_cost_and_update(
                 obs['word_vectors'],
                 obs['rates'],
                 obs['max_mask'],
                 obs['regimes'],
                 obs['doc_types']
             )
-            train_cost += cost/obs['word_vectors'].shape[2]
 
         if epoch_idx % 5 == 0:
             test_cost = 0
             for obs in test_data:
-                cost = model.get_cost(
+                test_cost += model.get_cost(
                         obs['word_vectors'],
                         obs['rates'],
                         obs['max_mask'],
                         obs['regimes'],
                         obs['doc_types']
                 )
-                test_cost += cost/obs['word_vectors'].shape[2]
             test_cost /= len(test_data)
             train_cost /= len(train_data)
             logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
