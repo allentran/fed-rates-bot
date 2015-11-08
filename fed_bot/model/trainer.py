@@ -106,7 +106,7 @@ def train(data_path, vocab_path):
     train_data = data[test_idx:]
 
     model = lstm.FedLSTM(
-        hidden_sizes=[256, 128, 128, 64],
+        hidden_sizes=[256, 128, 128, 64, 32],
         l2_penalty=1e-4,
         n_mixtures=2,
         vocab_size=word_embeddings.shape[0],

@@ -27,7 +27,7 @@ def model_test():
 
     model = lstm.FedLSTM(
         vocab_size=vocab_size,
-        hidden_sizes=[10, 20, 30, 40],
+        hidden_sizes=[10, 20, 22, 30, 40],
         n_mixtures=2,
         word_vectors=word_embeddings,
         doctype_size=7,

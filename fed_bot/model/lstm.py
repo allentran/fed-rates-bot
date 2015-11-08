@@ -78,6 +78,14 @@ class FedLSTM(object):
         )
         # T x n_sentences x n_batch x hidden[1]
 
+        lstmforward2_layer = layers.LSTMLayer(
+            lstmforward_layer.h_outputs,
+            hidden_sizes[2],
+            hidden_sizes[1],
+            truncate=truncate,
+        )
+        # T x n_sentences x n_batch x hidden[1]
+
         # max within a sentence (pick out phrases), then max over sentences
         # note first max eliminates first axis, so 2nd max(axis=0) kills 2nd axis
 
@@ -96,15 +104,15 @@ class FedLSTM(object):
 
         preoutput_layer = layers.DenseLayer(
             words_and_context,
-            hidden_sizes[1] + doctype_size + regime_size,
-            hidden_sizes[2],
+            hidden_sizes[2] + doctype_size + regime_size,
+            hidden_sizes[3],
             activation=TT.nnet.relu
         )
         # n_batch x hidden[2]
 
         output_layer = layers.DenseLayer(
             preoutput_layer.h_outputs,
-            hidden_sizes[2],
+            hidden_sizes[3],
             (2 + target_size) * n_mixtures,
             activation=TT.tanh
         )
