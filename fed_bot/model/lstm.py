@@ -133,7 +133,7 @@ class FedLSTM(object):
         l2_cost += l2_penalty * doctype_layer.get_l2sum(self.unique_doc_types)
         l2_cost += l2_penalty * word_vectors_layer.get_l2sum(self.unique_inputs)
 
-        self.loss_function = mixture_density_layer.nll_cost.sum() / inputs.shape[2]
+        self.loss_function = mixture_density_layer.nll_cost.sum() / TT.cast(inputs.shape[2], 'float32')
 
         updates = []
         for layer in self.layers:
