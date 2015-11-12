@@ -26,7 +26,7 @@ def load_data(data_path, n_rates=3, batch_size=32):
 
         return np.array(target_rates) / 100.0
 
-    def merge(data_to_batch, mask_value=-1e5):
+    def merge(data_to_batch, mask_value=0):
 
         max_n_sentences = max([len(obs['sentences']) for obs in data_to_batch])
         max_length = max([len(sentence) for obs in data_to_batch for sentence in obs['sentences']])
