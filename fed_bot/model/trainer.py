@@ -110,9 +110,10 @@ def train(data_path, vocab_path):
     train_data = data[test_idx:]
 
     model = lstm.FedLSTM(
-        hidden_sizes=[256, 128, 128, 64, 32],
+        hidden_size=32,
+        lstm_size=64,
         l2_penalty=1e-4,
-        n_mixtures=2,
+        n_mixtures=1,
         vocab_size=word_embeddings.shape[0],
         word_vectors=word_embeddings,
         truncate=100
@@ -122,16 +123,13 @@ def train(data_path, vocab_path):
         train_cost = 0
         random.shuffle(train_data)
         for obs in train_data:
-            train_cost += model.get_cost_and_update(
+            print model.get_cost_and_update(
                 obs['word_vectors'],
                 obs['rates'],
                 obs['max_mask'],
                 obs['regimes'],
                 obs['doc_types']
             )
-            import IPython
-            IPython.embed()
-            assert False
 
         if epoch_idx % 5 == 0:
             test_cost = 0

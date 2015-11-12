@@ -11,7 +11,8 @@ class FedLSTM(object):
             self,
             input_size=300,
             output_size=3,
-            hidden_sizes=None,
+            hidden_size=None,
+            lstm_size=None,
             truncate=10,
             n_mixtures=5,
             target_size=3,
@@ -57,31 +58,31 @@ class FedLSTM(object):
         preprocess_layer = layers.DenseLayer(
             inputs,
             input_size,
-            hidden_sizes[0],
+            lstm_size,
             activation=TT.nnet.relu
         )
         # T x n_sentences x n_batch x hidden[0]
 
         lstmforward_layer = layers.LSTMLayer(
             preprocess_layer.h_outputs,
-            hidden_sizes[1],
-            hidden_sizes[0],
+            lstm_size,
+            lstm_size,
             truncate=truncate,
         )
         # T x n_sentences x n_batch x hidden[1]
 
         lstmforward2_layer = layers.LSTMLayer(
             lstmforward_layer.h_outputs,
-            hidden_sizes[1],
-            hidden_sizes[1],
+            lstm_size,
+            lstm_size,
             truncate=truncate,
         )
         # T x n_sentences x n_batch x hidden[1]
 
         lstmforward3_layer = layers.LSTMLayer(
             lstmforward2_layer.h_outputs,
-            hidden_sizes[2],
-            hidden_sizes[1],
+            lstm_size,
+            lstm_size,
             truncate=truncate,
         )
         # T x n_sentences x n_batch x hidden[1]
@@ -104,17 +105,18 @@ class FedLSTM(object):
 
         preoutput_layer = layers.DenseLayer(
             words_and_context,
-            hidden_sizes[2] + doctype_size + regime_size,
-            hidden_sizes[3],
-            activation=TT.nnet.relu
+            lstm_size + doctype_size + regime_size,
+            hidden_size,
+            activation=TT.nnet.relu,
+            feature_axis=1,
+            normalize_axis=0
         )
         # n_batch x hidden[3]
 
         output_layer = layers.DenseLayer(
             preoutput_layer.h_outputs,
-            hidden_sizes[3],
+            hidden_size,
             (2 + target_size) * n_mixtures,
-            activation=TT.tanh
         )
 
         # n_batch x (2 * target_size) * n_mixtures
