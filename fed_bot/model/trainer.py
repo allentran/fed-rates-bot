@@ -34,7 +34,7 @@ def load_data(data_path, n_rates=3, batch_size=32):
 
         target_rates = np.zeros((batch_size, n_rates))
         word_vectors = np.zeros((max_length, max_n_sentences, batch_size))
-        max_mask = np.zeros((max_length, max_n_sentences, batch_size))
+        max_mask = np.ones((max_length, max_n_sentences, batch_size))
         regimes = np.zeros(batch_size)
         doc_types = np.zeros(batch_size)
         for data_idx in xrange(batch_size):
@@ -43,7 +43,7 @@ def load_data(data_path, n_rates=3, batch_size=32):
             for sentence_number, sentence in enumerate(sentences):
                 length = len(sentence)
                 word_vectors[0:length, sentence_number, data_idx] = sentence
-                max_mask[0:length, sentence_number, data_idx] = mask_value
+                max_mask[length:, sentence_number, data_idx] = mask_value
             target_rates[data_idx, :] = calc_target_rates(obs['rates'], days=['30', '90', '180'])
             if obs['is_minutes']:
                 doc_types[data_idx] = 1
@@ -69,9 +69,6 @@ def load_data(data_path, n_rates=3, batch_size=32):
 
     batched_data = []
     paired_data = sorted(paired_data, key=lambda obs: get_shape(obs['sentences']))
-    import IPython
-    IPython.embed()
-    assert False
 
     for start_idx in xrange(0, len(paired_data), batch_size):
         end_idx = min([start_idx + batch_size, len(paired_data)])
@@ -132,6 +129,9 @@ def train(data_path, vocab_path):
                 obs['regimes'],
                 obs['doc_types']
             )
+            import IPython
+            IPython.embed()
+            assert False
 
         if epoch_idx % 5 == 0:
             test_cost = 0
