@@ -57,6 +57,10 @@ def load_data(data_path, n_rates=3, batch_size=32):
             regimes=np.array(regimes).astype('int32'),
         )
 
+    def get_shape(list_of_lists):
+        max_inside_list = max([len(l) for l in list_of_lists])
+        return max_inside_list, len(list_of_lists)
+
     with open(data_path, 'r') as json_file:
         paired_data = json.load(json_file)
 
@@ -64,7 +68,10 @@ def load_data(data_path, n_rates=3, batch_size=32):
     random.shuffle(paired_data)
 
     batched_data = []
-    paired_data = sorted(paired_data, key=lambda obs: np.hstack(obs['sentences']).shape[0])
+    paired_data = sorted(paired_data, key=lambda obs: get_shape(obs['sentences']))
+    import IPython
+    IPython.embed()
+    assert False
 
     for start_idx in xrange(0, len(paired_data), batch_size):
         end_idx = min([start_idx + batch_size, len(paired_data)])
