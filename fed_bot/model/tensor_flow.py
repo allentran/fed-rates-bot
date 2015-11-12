@@ -1,19 +1,18 @@
 
 import tensorflow as tf
-import tensorflow.models.rnn.rnn_cell
+import tensorflow.models.rnn
 import numpy as np
 
 class DenseLayer(object):
 
-    def __init__(self, input):
+    def __init__(self, x_input, in_size, out_size):
 
-        shape = input.get_shape()
-        self.x = input
-        self.W = tf.Variable(tf.truncated_normal(shape, stddev=tf.sqrt(tf.constant(2.0, shape=shape) / (shape[0] * shape[1]))))
-        self.b = tf.Variable(tf.constant(0.1, tf.float32, shape=shape))
+        self.x = x_input
+        self.W = tf.Variable(tf.truncated_normal((in_size, out_size), stddev=tf.sqrt(tf.constant(2.0, shape=[]) / tf.cast(in_size * out_size, 'float'))))
+        self.b = tf.Variable(tf.constant(0.1, tf.float32, shape=[out_size]))
 
-    def activation(self, x):
-        return tf.nn.relu(tf.matmul(x, self.W) + self.b)
+    def activated(self, x, activation=tf.nn.relu):
+        return activation(tf.matmul(x, self.W) + self.b)
 
 class FedLSTM(object):
 
@@ -49,15 +48,25 @@ class FedLSTM(object):
         rates = tf.placeholder(tf.float32, shape=[None, n_rates])
         mask = tf.placeholder(tf.float32, shape=[None, None, None])
 
+        batch_size = tf.shape(word_inputs)[0]
+        batch_size = tf.shape(word_inputs)[0]
+
         words_embeddings = tf.nn.embedding_lookup(self.word_embeddings, word_inputs)
         regime_embeddings = tf.nn.embedding_lookup(self.regime_embeddings, regime_inputs)
         doctype_embeddings = tf.nn.embedding_lookup(self.doctype_embeddings, doctype_inputs)
 
-        preprocess_layer = DenseLayer(words_embeddings)
+        preprocess_layer = DenseLayer(words_embeddings, embedding_size, hidden_sizes[0])
 
+        lstm = tensorflow.models.rnn.rnn_cell.BasicLSTMCell(hidden_sizes[1])
+        stacked_lstm = tensorflow.models.rnn.rnn_cell.MultiRNNCell([lstm] * 2)
+
+        initial_state = state = stacked_lstm.zero_state(batch_size, tf.float32)
+        for i in range(len(num_steps)):
+            # The value of state is updated after processing each batch of words.
+            output, state = stacked_lstm(words[:, i], state)
 
 def main():
-    fed = FedLSTM()
+    fed = FedLSTM(hidden_sizes=[23, 100])
 
 if __name__ == '__main__':
     main()
