@@ -123,7 +123,7 @@ def train(data_path, vocab_path):
         train_cost = 0
         random.shuffle(train_data)
         for obs in train_data:
-            print model.get_cost_and_update(
+            train_cost += model.get_cost_and_update(
                 obs['word_vectors'],
                 obs['rates'],
                 obs['max_mask'],
