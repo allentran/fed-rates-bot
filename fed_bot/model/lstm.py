@@ -117,6 +117,9 @@ class FedLSTM(object):
             preoutput_layer.h_outputs,
             hidden_size,
             (2 + target_size) * n_mixtures,
+            feature_axis=1,
+            normalize_axis=0,
+            activation=TT.tanh
         )
 
         # n_batch x (2 * target_size) * n_mixtures
