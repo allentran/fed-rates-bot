@@ -6,6 +6,7 @@ import json
 from spacy.en import English
 import allen_utils
 import numpy as np
+import joblib
 
 import lstm
 
@@ -107,7 +108,7 @@ def evaluate(model, data):
 
 def train(data_path, vocab_path):
 
-    n_epochs = 200
+    n_epochs = 1
     test_frac = 0.2
 
     data = load_data(data_path, batch_size=2)
@@ -125,7 +126,7 @@ def train(data_path, vocab_path):
         n_mixtures=1,
         vocab_size=word_embeddings.shape[0],
         word_vectors=word_embeddings,
-        truncate=100
+        truncate=200
     )
 
     for epoch_idx in xrange(n_epochs):
@@ -164,7 +165,8 @@ def train(data_path, vocab_path):
             logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
 
     test_output = evaluate(model, test_data)
-
+    import IPython
+    IPython.embed()
 
 if __name__ == "__main__":
     train('data/paired_data.json', 'data/dictionary.json')
