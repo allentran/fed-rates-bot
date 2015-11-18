@@ -95,6 +95,15 @@ def build_wordvectors(vocab_dict_path):
 
     return word_vectors.astype('float32')
 
+def evaluate(model, data):
+    outputs = []
+    for obs in data:
+        model_output = model.get_output(obs['word_vectors'], obs['max_mask'], obs['regimes'], obs['doc_types'])
+        outputs.append(
+            {'rates': obs['rates'], 'model_output': model_output}
+        )
+
+    return outputs
 
 def train(data_path, vocab_path):
 
@@ -144,6 +153,9 @@ def train(data_path, vocab_path):
             test_cost /= len(test_data)
             train_cost /= len(train_data)
             logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
+
+    test_output = evaluate(model, test_data)
+
 
 if __name__ == "__main__":
     train('data/paired_data.json', 'data/dictionary.json')
