@@ -63,26 +63,11 @@ class FedLSTM(object):
         )
         # T x n_sentences x n_batch x hidden[0]
 
-        lstmforward_layer = layers.LSTMLayer(
+        lstmforward_layer = layers.LSTMStackedLayer(
             preprocess_layer.h_outputs,
             lstm_size,
-            lstm_size,
-            truncate=truncate,
-        )
-        # T x n_sentences x n_batch x hidden[1]
-
-        lstmforward2_layer = layers.LSTMLayer(
-            lstmforward_layer.h_outputs,
-            lstm_size,
-            lstm_size,
-            truncate=truncate,
-        )
-        # T x n_sentences x n_batch x hidden[1]
-
-        lstmforward3_layer = layers.LSTMLayer(
-            lstmforward2_layer.h_outputs,
-            lstm_size,
-            lstm_size,
+            n_layers=2,
+            input_size=lstm_size,
             truncate=truncate,
         )
         # T x n_sentences x n_batch x hidden[1]
@@ -90,7 +75,7 @@ class FedLSTM(object):
         # max within a sentence (pick out phrases), then max over sentences
         # note first max eliminates first axis, so 2nd max(axis=0) kills 2nd axis
 
-        max_pooled_words = (lstmforward3_layer.h_outputs * self.mask[:, :, :, None]).max(axis=0).max(axis=0)
+        max_pooled_words = (lstmforward_layer.h_outputs * self.mask[:, :, :, None]).max(axis=0).max(axis=0)
         # n_batch x hidden[1]
 
         words_and_context = TT.concatenate(
@@ -134,8 +119,6 @@ class FedLSTM(object):
         self.layers = [
             preprocess_layer,
             lstmforward_layer,
-            lstmforward2_layer,
-            lstmforward3_layer,
             preoutput_layer,
             output_layer,
         ]
