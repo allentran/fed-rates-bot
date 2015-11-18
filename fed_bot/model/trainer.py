@@ -110,7 +110,7 @@ def train(data_path, vocab_path):
     n_epochs = 200
     test_frac = 0.2
 
-    data = load_data(data_path, batch_size=3)
+    data = load_data(data_path, batch_size=2)
 
     word_embeddings = build_wordvectors(vocab_path)
 
@@ -139,6 +139,15 @@ def train(data_path, vocab_path):
                 obs['regimes'],
                 obs['doc_types']
             )
+            output = model.get_output(
+                obs['word_vectors'],
+                obs['max_mask'],
+                obs['regimes'],
+                obs['doc_types']
+            )
+            import IPython
+            IPython.embed()
+            assert False
 
         if epoch_idx % 5 == 0:
             test_cost = 0
