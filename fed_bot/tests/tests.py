@@ -27,7 +27,8 @@ def model_test():
 
     model = lstm.FedLSTM(
         vocab_size=vocab_size,
-        hidden_sizes=[10, 20, 22, 30, 40],
+        hidden_size=9,
+        lstm_size=12,
         n_mixtures=2,
         word_vectors=word_embeddings,
         doctype_size=7,
@@ -35,13 +36,24 @@ def model_test():
         input_size=word_vector_size
     )
 
-    model.get_cost_and_update(
+    first_cost = model.get_cost_and_update(
         test_ob['word_vectors'],
         test_ob['rates'],
         test_ob['max_mask'],
         test_ob['regimes'],
         test_ob['doc_types']
     )
+
+    for _ in xrange(5):
+        last_cost = model.get_cost_and_update(
+            test_ob['word_vectors'],
+            test_ob['rates'],
+            test_ob['max_mask'],
+            test_ob['regimes'],
+            test_ob['doc_types']
+        )
+
+    assert first_cost > last_cost
 
 def scraper_test():
 

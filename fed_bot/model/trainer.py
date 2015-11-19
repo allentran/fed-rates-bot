@@ -6,6 +6,7 @@ import json
 from spacy.en import English
 import allen_utils
 import numpy as np
+import joblib
 
 import lstm
 
@@ -26,7 +27,7 @@ def load_data(data_path, n_rates=3, batch_size=32):
 
         return np.array(target_rates) / 100.0
 
-    def merge(data_to_batch, mask_value=-1e5):
+    def merge(data_to_batch, mask_value=0):
 
         max_n_sentences = max([len(obs['sentences']) for obs in data_to_batch])
         max_length = max([len(sentence) for obs in data_to_batch for sentence in obs['sentences']])
@@ -34,7 +35,7 @@ def load_data(data_path, n_rates=3, batch_size=32):
 
         target_rates = np.zeros((batch_size, n_rates))
         word_vectors = np.zeros((max_length, max_n_sentences, batch_size))
-        max_mask = np.zeros((max_length, max_n_sentences, batch_size))
+        max_mask = np.ones((max_length, max_n_sentences, batch_size))
         regimes = np.zeros(batch_size)
         doc_types = np.zeros(batch_size)
         for data_idx in xrange(batch_size):
@@ -43,7 +44,7 @@ def load_data(data_path, n_rates=3, batch_size=32):
             for sentence_number, sentence in enumerate(sentences):
                 length = len(sentence)
                 word_vectors[0:length, sentence_number, data_idx] = sentence
-                max_mask[0:length, sentence_number, data_idx] = mask_value
+                max_mask[length:, sentence_number, data_idx] = mask_value
             target_rates[data_idx, :] = calc_target_rates(obs['rates'], days=['30', '90', '180'])
             if obs['is_minutes']:
                 doc_types[data_idx] = 1
@@ -57,6 +58,10 @@ def load_data(data_path, n_rates=3, batch_size=32):
             regimes=np.array(regimes).astype('int32'),
         )
 
+    def get_shape(list_of_lists):
+        max_inside_list = max([len(l) for l in list_of_lists])
+        return max_inside_list, len(list_of_lists)
+
     with open(data_path, 'r') as json_file:
         paired_data = json.load(json_file)
 
@@ -64,7 +69,7 @@ def load_data(data_path, n_rates=3, batch_size=32):
     random.shuffle(paired_data)
 
     batched_data = []
-    paired_data = sorted(paired_data, key=lambda obs: np.hstack(obs['sentences']).shape[0])
+    paired_data = sorted(paired_data, key=lambda obs: get_shape(obs['sentences']))
 
     for start_idx in xrange(0, len(paired_data), batch_size):
         end_idx = min([start_idx + batch_size, len(paired_data)])
@@ -91,13 +96,22 @@ def build_wordvectors(vocab_dict_path):
 
     return word_vectors.astype('float32')
 
+def evaluate(model, data):
+    outputs = []
+    for obs in data:
+        model_output = model.get_output(obs['word_vectors'], obs['max_mask'], obs['regimes'], obs['doc_types'])
+        outputs.append(
+            {'rates': obs['rates'], 'model_output': model_output}
+        )
+
+    return outputs
 
 def train(data_path, vocab_path):
 
-    n_epochs = 200
+    n_epochs = 1
     test_frac = 0.2
 
-    data = load_data(data_path, batch_size=3)
+    data = load_data(data_path, batch_size=2)
 
     word_embeddings = build_wordvectors(vocab_path)
 
@@ -106,12 +120,13 @@ def train(data_path, vocab_path):
     train_data = data[test_idx:]
 
     model = lstm.FedLSTM(
-        hidden_sizes=[256, 128, 128, 64, 32],
+        hidden_size=32,
+        lstm_size=64,
         l2_penalty=1e-4,
-        n_mixtures=2,
+        n_mixtures=1,
         vocab_size=word_embeddings.shape[0],
         word_vectors=word_embeddings,
-        truncate=100
+        truncate=200
     )
 
     for epoch_idx in xrange(n_epochs):
@@ -125,6 +140,15 @@ def train(data_path, vocab_path):
                 obs['regimes'],
                 obs['doc_types']
             )
+            output = model.get_output(
+                obs['word_vectors'],
+                obs['max_mask'],
+                obs['regimes'],
+                obs['doc_types']
+            )
+            import IPython
+            IPython.embed()
+            assert False
 
         if epoch_idx % 5 == 0:
             test_cost = 0
@@ -139,6 +163,10 @@ def train(data_path, vocab_path):
             test_cost /= len(test_data)
             train_cost /= len(train_data)
             logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
+
+    test_output = evaluate(model, test_data)
+    import IPython
+    IPython.embed()
 
 if __name__ == "__main__":
     train('data/paired_data.json', 'data/dictionary.json')
