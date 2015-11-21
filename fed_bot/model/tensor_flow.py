@@ -38,17 +38,16 @@ class FedLSTM(object):
         self.regime_embeddings = tf.Variable(tf.random_uniform([n_regimes, regime_size], -1.0, 1.0))
         self.doctype_embeddings = tf.Variable(tf.random_uniform([n_docs, doctype_size], -1.0, 1.0))
 
-        # Placeholders for word inputs: T x batch_size x n_sentence
         #                  doctypes: batch_size x n_rates
         #                  regimes: batch_size x n_rates
         #                  rates: batch_size x n_rates
+        #                  mask: numsteps x batch_size x n_sentence
 
         word_inputs = tf.placeholder(tf.int32, shape=[num_steps, None, None])
         regime_inputs = tf.placeholder(tf.int32, shape=[None])
         doctype_inputs = tf.placeholder(tf.int32, shape=[None])
         rates = tf.placeholder(tf.float32, shape=[None, n_rates])
-        mask = tf.placeholder(tf.float32, shape=[None, None, None])
-
+        mask = tf.placeholder(tf.float32, shape=[num_steps, None, None])
 
         n_sentences = 7 #tf.shape(word_inputs)[2]
         batch_size = 8 #tf.shape(word_inputs)[1]
