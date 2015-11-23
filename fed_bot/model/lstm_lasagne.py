@@ -106,11 +106,11 @@ class FedLSTMLasagne(object):
         preoutput_layer = lasagne.layers.DenseLayer(merge_dropout, hidden_size)
         output_layer = lasagne.layers.DenseLayer(preoutput_layer, (2 + target_size) * n_mixtures, nonlinearity=None)
 
-        # l2_penalty = regularize_network_params(output_layer, l2)
+        l2_penalty = regularize_network_params(output_layer, l2)
 
         priors, means, stds = mixture_density_outputs(lasagne.layers.get_output(output_layer, deterministic=False), target_size, n_mixtures)
         priors_det, means_det, stds_det = mixture_density_outputs(lasagne.layers.get_output(output_layer, deterministic=True), target_size, n_mixtures)
-        loss = mixture_density_loss(priors, means, stds, self.targets, target_size).mean() #+ l2_penalty * l2_scale
+        loss = mixture_density_loss(priors, means, stds, self.targets, target_size).mean() + l2_penalty * l2_scale
         cost_ex_l2 = mixture_density_loss(priors_det, means_det, stds_det, self.targets, target_size).mean()
 
         params = lasagne.layers.get_all_params(output_layer, trainable=True)
@@ -125,7 +125,7 @@ class FedLSTMLasagne(object):
                 self.doc_types,
                 self.targets
             ],
-            loss,
+            cost_ex_l2,
             updates=updates
         )
 
