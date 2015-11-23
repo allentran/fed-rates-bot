@@ -62,8 +62,12 @@ def lasagne_test():
     n_words = 11
     n_targets = 3
     n_mixtures = 2
+    vocab_size = 20
+    word_size = 6
 
-    fedlstm_model = lstm_lasagne.FedLSTMLasagne(20, 5, 50, 2, 13, 10, target_size=n_targets, n_mixtures=n_mixtures)
+    word_vectors = np.random.randn(vocab_size, word_size).astype('float32')
+
+    fedlstm_model = lstm_lasagne.FedLSTMLasagne(vocab_size, word_size, 50, 13, 10, target_size=n_targets, n_mixtures=n_mixtures, init_word_vectors=word_vectors)
 
     targets = np.random.randn(n_batch, n_targets).astype('float32')
     words = np.random.randint(0, 10, size=(n_batch, n_sentence, n_words)).astype('int32')
