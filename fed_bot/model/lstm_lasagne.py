@@ -12,11 +12,35 @@ class LastTimeStepLayer(lasagne.layers.Layer):
         self.batch_size = batch_size
         self.last_indexes = last_indexes
 
+    # from batch x T x k to batch x k
     def get_output_for(self, input, **kwargs):
         return input[TT.arange(self.batch_size), self.last_indexes]
 
     def get_output_shape_for(self, input_shape):
         return input_shape[0], input_shape[2]
+
+# input should be batch x (2 + target_size) * n_mixtures
+# target is batch x target_size
+def mixture_density_loss(input, targets, target_size, n_mixtures, mask=None):
+
+    batch_size = input.shape[0]
+
+    m_by_n = n_mixtures * target_size
+
+    priors = TT.nnet.softmax(input[:, :n_mixtures]) # batch, n_mixtures
+    means = input[:, n_mixtures:n_mixtures + m_by_n].reshape((batch_size, target_size, n_mixtures)) # batch x target x mixtures
+    stds = TT.exp(input[:, n_mixtures + m_by_n:]).reshape((batch_size, n_mixtures)) # batch x n_mixtures
+
+    kernel_constant =  ((2 * np.pi) ** -0.5) * (1 / (stds ** target_size))
+    norm_std =((targets[:, :, None] - means).norm(2, axis=1)) / (2 * TT.sqr(stds)) # normed over targets
+    kernel = kernel_constant * TT.exp(-norm_std)
+
+    e_prob = (priors * kernel).sum(axis=1) # summing over mixtures
+
+    if mask:
+        return -(mask * TT.log(e_prob))
+    else:
+        return -(TT.log(e_prob))
 
 class FedLSTMLasagne(object):
 
@@ -28,11 +52,15 @@ class FedLSTMLasagne(object):
             regime_size=None,
             n_docs=None,
             doc_size=None,
-            lstm_size=32
+            lstm_size=32,
+            hidden_size=11,
+            n_mixtures=2,
+            target_size=3
     ):
 
-        self.inputs_indexes = TT.imatrix() # batch_size x T
-        self.last_indexes = TT.ivector() # batch_size
+        self.inputs_indexes = TT.imatrix() # sentences x T
+        self.last_indexes = TT.ivector() # sentences
+        self.targets = TT.matrix(dtype=theano.config.floatX) # batch_size
         self.regimes = TT.ivector() # minibatch
         self.doc_types = TT.ivector() # minibatch
 
@@ -48,27 +76,51 @@ class FedLSTMLasagne(object):
 
         word_embeddings = lasagne.layers.ReshapeLayer(word_embeddings, (-1, word_size))
 
-        preprocessed_layer = lasagne.layers.DenseLayer(word_embeddings, lstm_size)
+        preprocessed_layer = lasagne.layers.DenseLayer(word_embeddings, lstm_size, )
+        preprocessed_dropout = lasagne.layers.DropoutLayer(preprocessed_layer, p=0.5)
 
-        reshaped_preprocessed_layer = lasagne.layers.ReshapeLayer(preprocessed_layer, shape=(batch_size, T, lstm_size))
-        lstm_layer = lasagne.layers.LSTMLayer(reshaped_preprocessed_layer, lstm_size)
-        lstm_layer2 = lasagne.layers.LSTMLayer(lstm_layer, lstm_size)
+        reshaped_preprocessed_layer = lasagne.layers.ReshapeLayer(preprocessed_dropout, shape=(batch_size, T, lstm_size))
 
-        lstm_last = LastTimeStepLayer(lstm_layer2, batch_size, self.last_indexes)
+        forget_gate = lasagne.layers.Gate(b=lasagne.init.Constant(5.0))
+        lstm_layer = lasagne.layers.LSTMLayer(reshaped_preprocessed_layer, lstm_size, forgetgate=forget_gate)
+        forget_gate = lasagne.layers.Gate(b=lasagne.init.Constant(5.0))
+        lstm_layer2 = lasagne.layers.LSTMLayer(lstm_layer, lstm_size, forgetgate=forget_gate)
 
-        loss = lasagne.layers.get_output(lstm_last).mean()
+        sentence_summary = LastTimeStepLayer(lstm_layer2, batch_size, self.last_indexes)
+        # sentence_summary = lasagne.layers.ReshapeLayer(sentence_summary, shape=(batch_size, 1, lstm_size))
 
-        params = lasagne.layers.get_all_params(lstm_last, trainable=True)
-        updates = lasagne.updates.nesterov_momentum(loss, params, learning_rate=0.01, momentum=0.9)
+        # forget_gate = lasagne.layers.Gate(b=lasagne.init.Constant(5.0))
+        # doc_summary = lasagne.layers.LSTMLayer(sentence_summary, lstm_size, forgetgate=forget_gate)
+        # doc_summary = lasagne.layers.ReshapeLayer(doc_summary, shape=(batch_size, lstm_size))
 
-        self._train = theano.function([self.inputs_indexes, self.last_indexes], loss, updates=updates)
+        merge_layer = lasagne.layers.ConcatLayer([sentence_summary, regime_embeddings, doc_embeddings])
+        merge_dropout = lasagne.layers.DropoutLayer(merge_layer, p=0.5)
 
-    def train(self):
+        preoutput_layer = lasagne.layers.DenseLayer(merge_dropout, hidden_size)
+        output_layer = lasagne.layers.DenseLayer(preoutput_layer, (2 + target_size) * n_mixtures, nonlinearity=None)
 
-        self._train(np.ones((7, 2)).astype('int32'), np.ones(7).astype('int32'))
+        loss = mixture_density_loss(lasagne.layers.get_output(output_layer), self.targets, target_size, n_mixtures).mean()
 
+        params = lasagne.layers.get_all_params(output_layer, trainable=True)
+        updates = lasagne.updates.adadelta(loss, params)
 
-if __name__ == "__main__":
+        self._train = theano.function(
+            [
+                self.inputs_indexes,
+                self.last_indexes,
+                self.regimes,
+                self.doc_types,
+                self.targets
+            ],
+            loss,
+            updates=updates
+        )
 
-    fedlstm_model = FedLSTMLasagne(20, 5, 50, 2, 13, 10)
-    fedlstm_model.train()
+    def train(self, targets, sentences, last_indexes, regimes, doctypes):
+        return self._train(
+            sentences,
+            last_indexes,
+            regimes,
+            doctypes,
+            targets
+        )

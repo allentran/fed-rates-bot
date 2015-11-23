@@ -3,7 +3,7 @@ __author__ = 'allentran'
 import numpy as np
 
 from ..scraper import Scraper
-from ..model import lstm
+from ..model import lstm, lstm_lasagne
 
 def model_test():
 
@@ -51,6 +51,32 @@ def model_test():
             test_ob['max_mask'],
             test_ob['regimes'],
             test_ob['doc_types']
+        )
+
+    assert first_cost > last_cost
+
+def lasagne_test():
+
+    fedlstm_model = lstm_lasagne.FedLSTMLasagne(20, 5, 50, 2, 13, 10)
+
+    targets = np.random.randn(5, 3).astype('float32')
+    words = np.random.randint(0, 20, size=(5, 2)).astype('int32')
+
+    first_cost = fedlstm_model._train(
+        words,
+        np.ones(5).astype('int32'),
+        np.ones(5).astype('int32'),
+        np.ones(5).astype('int32'),
+        targets
+    )
+
+    for _ in xrange(10):
+        last_cost = fedlstm_model._train(
+            words,
+            np.ones(5).astype('int32'),
+            np.ones(5).astype('int32'),
+            np.ones(5).astype('int32'),
+            targets
         )
 
     assert first_cost > last_cost
