@@ -57,14 +57,21 @@ def model_test():
 
 def lasagne_test():
 
-    fedlstm_model = lstm_lasagne.FedLSTMLasagne(20, 5, 50, 2, 13, 10)
+    n_batch = 5
+    n_sentence = 4
+    n_words = 11
+    n_targets = 3
+    n_mixtures = 2
 
-    targets = np.random.randn(5, 3).astype('float32')
-    words = np.random.randint(0, 20, size=(5, 2)).astype('int32')
+    fedlstm_model = lstm_lasagne.FedLSTMLasagne(20, 5, 50, 2, 13, 10, target_size=n_targets, n_mixtures=n_mixtures)
+
+    targets = np.random.randn(n_batch, n_targets).astype('float32')
+    words = np.random.randint(0, 10, size=(n_batch, n_sentence, n_words)).astype('int32')
 
     first_cost = fedlstm_model._train(
         words,
-        np.ones(5).astype('int32'),
+        10 * np.ones((n_batch, n_sentence)).astype('int32'),
+        3 * np.ones((n_batch)).astype('int32'),
         np.ones(5).astype('int32'),
         np.ones(5).astype('int32'),
         targets
@@ -73,7 +80,8 @@ def lasagne_test():
     for _ in xrange(10):
         last_cost = fedlstm_model._train(
             words,
-            np.ones(5).astype('int32'),
+            10 * np.ones((n_batch, n_sentence)).astype('int32'),
+            3 * np.ones((n_batch)).astype('int32'),
             np.ones(5).astype('int32'),
             np.ones(5).astype('int32'),
             targets

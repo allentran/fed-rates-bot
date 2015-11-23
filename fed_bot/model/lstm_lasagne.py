@@ -58,17 +58,18 @@ class FedLSTMLasagne(object):
             target_size=3
     ):
 
-        self.inputs_indexes = TT.imatrix() # sentences x T
-        self.last_indexes = TT.ivector() # sentences
+        self.inputs_indexes = TT.tensor3(dtype='int32') # batch x sentences x T
+        self.last_word_in_sentence = TT.imatrix() # batch x sentences
+        self.last_sentence_in_doc = TT.ivector() # batch
         self.targets = TT.matrix(dtype=theano.config.floatX) # batch_size
         self.regimes = TT.ivector() # minibatch
         self.doc_types = TT.ivector() # minibatch
 
-        word_input_layer = lasagne.layers.InputLayer(shape=(None, None), input_var=self.inputs_indexes)
+        word_input_layer = lasagne.layers.InputLayer(shape=(None, None, None), input_var=self.inputs_indexes)
         regime_input_layer = lasagne.layers.InputLayer(shape=(None, ), input_var=self.regimes)
         doc_input_layer = lasagne.layers.InputLayer(shape=(None, ), input_var=self.doc_types)
 
-        batch_size, T = word_input_layer.input_var.shape
+        batch_size, n_sentences, T = word_input_layer.input_var.shape
 
         word_embeddings = lasagne.layers.EmbeddingLayer(word_input_layer, n_words, word_size)
         regime_embeddings = lasagne.layers.EmbeddingLayer(regime_input_layer, n_regimes, regime_size)
@@ -76,24 +77,25 @@ class FedLSTMLasagne(object):
 
         word_embeddings = lasagne.layers.ReshapeLayer(word_embeddings, (-1, word_size))
 
-        preprocessed_layer = lasagne.layers.DenseLayer(word_embeddings, lstm_size, )
+        preprocessed_layer = lasagne.layers.DenseLayer(word_embeddings, lstm_size)
         preprocessed_dropout = lasagne.layers.DropoutLayer(preprocessed_layer, p=0.5)
 
-        reshaped_preprocessed_layer = lasagne.layers.ReshapeLayer(preprocessed_dropout, shape=(batch_size, T, lstm_size))
+        reshaped_preprocessed_layer = lasagne.layers.ReshapeLayer(preprocessed_dropout, shape=(batch_size * n_sentences, T, lstm_size))
 
         forget_gate = lasagne.layers.Gate(b=lasagne.init.Constant(5.0))
         lstm_layer = lasagne.layers.LSTMLayer(reshaped_preprocessed_layer, lstm_size, forgetgate=forget_gate)
         forget_gate = lasagne.layers.Gate(b=lasagne.init.Constant(5.0))
         lstm_layer2 = lasagne.layers.LSTMLayer(lstm_layer, lstm_size, forgetgate=forget_gate)
 
-        sentence_summary = LastTimeStepLayer(lstm_layer2, batch_size, self.last_indexes)
-        # sentence_summary = lasagne.layers.ReshapeLayer(sentence_summary, shape=(batch_size, 1, lstm_size))
+        sentence_summary = LastTimeStepLayer(lstm_layer2, batch_size * n_sentences, TT.reshape(self.last_word_in_sentence, (batch_size * n_sentences,)))
+        sentence_summary = lasagne.layers.ReshapeLayer(sentence_summary, shape=(batch_size, n_sentences, lstm_size))
 
-        # forget_gate = lasagne.layers.Gate(b=lasagne.init.Constant(5.0))
-        # doc_summary = lasagne.layers.LSTMLayer(sentence_summary, lstm_size, forgetgate=forget_gate)
-        # doc_summary = lasagne.layers.ReshapeLayer(doc_summary, shape=(batch_size, lstm_size))
+        forget_gate = lasagne.layers.Gate(b=lasagne.init.Constant(5.0))
+        doc_summary = lasagne.layers.LSTMLayer(sentence_summary, lstm_size, forgetgate=forget_gate)
 
-        merge_layer = lasagne.layers.ConcatLayer([sentence_summary, regime_embeddings, doc_embeddings])
+        last_doc_summary = LastTimeStepLayer(doc_summary, batch_size, self.last_sentence_in_doc) # batch x lstm_size
+
+        merge_layer = lasagne.layers.ConcatLayer([last_doc_summary, regime_embeddings, doc_embeddings])
         merge_dropout = lasagne.layers.DropoutLayer(merge_layer, p=0.5)
 
         preoutput_layer = lasagne.layers.DenseLayer(merge_dropout, hidden_size)
@@ -107,7 +109,8 @@ class FedLSTMLasagne(object):
         self._train = theano.function(
             [
                 self.inputs_indexes,
-                self.last_indexes,
+                self.last_word_in_sentence,
+                self.last_sentence_in_doc,
                 self.regimes,
                 self.doc_types,
                 self.targets
@@ -116,10 +119,11 @@ class FedLSTMLasagne(object):
             updates=updates
         )
 
-    def train(self, targets, sentences, last_indexes, regimes, doctypes):
+    def train(self, targets, sentences, last_word, last_sentence, regimes, doctypes):
         return self._train(
             sentences,
-            last_indexes,
+            last_word,
+            last_sentence,
             regimes,
             doctypes,
             targets
