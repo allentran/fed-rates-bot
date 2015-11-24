@@ -111,12 +111,35 @@ def evaluate(model, data):
 
     return outputs
 
+def eval_lasagne_on_test(model, test_data):
+
+    test_outputs = []
+
+    for obs in test_data:
+        priors, means, stds = model.get_output(
+            np.swapaxes(obs['word_vectors'], 0, 2),
+            np.swapaxes(obs['last_word_in_sentence'], 0, 1),
+            obs['last_sentence'],
+            obs['regimes'],
+            obs['doc_types']
+        )
+        batch_size, target_size, n_mixtures = means.shape
+        for obs_idx in xrange(batch_size):
+            test_output = dict()
+            test_output['rates'] = obs['rates'][obs_idx, :]
+            test_output['priors'] = priors[obs_idx, :]
+            test_output['means'] = means[obs_idx, :, :]
+            test_output['stds'] = stds[obs_idx, :]
+            test_outputs.append(test_output)
+
+    return test_outputs
+
 def train_lasagne(data_path, vocab_path):
 
     n_epochs = 500
     test_frac = 0.2
 
-    data = load_data(data_path, batch_size=2)
+    data = load_data(data_path, batch_size=4)
 
     word_embeddings = build_wordvectors(vocab_path)
 
@@ -135,6 +158,7 @@ def train_lasagne(data_path, vocab_path):
         word_size=word_embeddings.shape[1],
         init_word_vectors=word_embeddings
     )
+
 
     for epoch_idx in xrange(n_epochs):
         train_cost = 0
@@ -163,6 +187,11 @@ def train_lasagne(data_path, vocab_path):
             test_cost /= len(test_data)
             train_cost /= len(train_data)
             logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
+
+    test_results = eval_lasagne_on_test(model, train_data)
+    with open('results.json', 'w') as f:
+        json.dump(test_results, f, indent=2)
+
 
 def train_theano(data_path, vocab_path):
 
