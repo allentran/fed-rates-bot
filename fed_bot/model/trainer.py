@@ -6,6 +6,7 @@ import json
 from spacy.en import English
 import allen_utils
 import numpy as np
+import joblib
 
 import lstm, lstm_lasagne
 
@@ -189,8 +190,7 @@ def train_lasagne(data_path, vocab_path):
             logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
 
     test_results = eval_lasagne_on_test(model, train_data)
-    with open('results.json', 'w') as f:
-        json.dump(test_results, f, indent=2)
+    joblib.dump(test_results, 'results.pkl')
 
 
 def train_theano(data_path, vocab_path):
