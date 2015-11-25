@@ -35,8 +35,8 @@ def mixture_density_outputs(input, target_size, n_mixtures):
 # target is batch x target_size
 def mixture_density_loss(priors, means, stds, targets, target_size, mask=None):
 
-    kernel_constant =  ((2 * np.pi) ** (-0.5 * target_size)) * (1 / (stds ** target_size))
-    norm_std =((targets[:, :, None] - means).norm(2, axis=1)) / (2 * TT.sqr(stds)) # normed over targets
+    kernel_constant = ((2 * np.pi) ** (-0.5 * target_size)) * (1 / (stds ** target_size))
+    norm_std = (TT.sqr(targets[:, :, None] - means).sum(axis=1)) / (2 * TT.sqr(stds)) # normed over targets
     kernel = kernel_constant * TT.exp(-norm_std)
 
     e_prob = (priors * kernel).sum(axis=1) # summing over mixtures
