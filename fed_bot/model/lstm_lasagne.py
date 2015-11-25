@@ -126,7 +126,7 @@ class FedLSTMLasagne(object):
                 [priors_det, means_det, stds_det],
             )
         else:
-            output_layer = lasagne.layers.DenseLayer(preoutput_layer, target_size)
+            output_layer = lasagne.layers.DenseLayer(preoutput_layer, target_size, nonlinearity=None)
             l2_penalty = regularize_network_params(output_layer, l2)
             loss = lasagne.objectives.squared_error(lasagne.layers.get_output(output_layer, deterministic=False), self.targets).mean() + l2_penalty * l2_scale
             cost_ex_l2 = TT.sqrt(lasagne.objectives.squared_error(lasagne.layers.get_output(output_layer, deterministic=True), self.targets).mean())
