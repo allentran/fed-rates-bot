@@ -8,3 +8,5 @@ The models revolve around various forms of stacked LSTMs and piping the output t
 The best result that I have is shown below (on test data).
 
 ![Results](https://github.com/allentran/fed-rates-bot/blob/master/prelim_results.png)
+
+Pretty good for a relatively tiny amount of data.  I may do this for Australia and the UK if I have time, otherwise happy to take PRs for data.
