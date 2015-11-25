@@ -36,15 +36,16 @@ def mixture_density_outputs(input, target_size, n_mixtures):
 def mixture_density_loss(priors, means, stds, targets, target_size, mask=None, eps=1e-4):
 
     kernel_constant = ((2 * np.pi) ** (-0.5 * target_size)) * (1 / (stds ** target_size))
-    norm_std = (TT.sqr(targets[:, :, None] - means).sum(axis=1)) / (2 * TT.sqr(stds)) # normed over targets
-    kernel = kernel_constant * TT.exp(-norm_std)
+    norm_std = - (TT.sqr(targets[:, :, None] - means).sum(axis=1)) / (2 * TT.sqr(stds)) # normed over targets
+    max_norm_std = norm_std.max(axis=1)
+    kernel_minus_max = kernel_constant * TT.exp(norm_std - max_norm_std[:, None])
 
-    e_prob = (priors * kernel).sum(axis=1) # summing over mixtures
+    log_e_prob = TT.log((priors * kernel_minus_max).sum(axis=1)) + max_norm_std# summing over mixtures
 
     if mask:
-        return -(mask * TT.log(e_prob + eps))
+        return - mask * log_e_prob
     else:
-        return -(TT.log(e_prob + eps))
+        return - log_e_prob
 
 class FedLSTMLasagne(object):
 
