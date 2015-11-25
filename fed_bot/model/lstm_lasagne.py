@@ -33,7 +33,7 @@ def mixture_density_outputs(input, target_size, n_mixtures):
 
 # input should be batch x (2 + target_size) * n_mixtures
 # target is batch x target_size
-def mixture_density_loss(priors, means, stds, targets, target_size, mask=None):
+def mixture_density_loss(priors, means, stds, targets, target_size, mask=None, eps=14-4):
 
     kernel_constant = ((2 * np.pi) ** (-0.5 * target_size)) * (1 / (stds ** target_size))
     norm_std = (TT.sqr(targets[:, :, None] - means).sum(axis=1)) / (2 * TT.sqr(stds)) # normed over targets
@@ -42,9 +42,9 @@ def mixture_density_loss(priors, means, stds, targets, target_size, mask=None):
     e_prob = (priors * kernel).sum(axis=1) # summing over mixtures
 
     if mask:
-        return -(mask * TT.log(e_prob))
+        return -(mask * TT.log(e_prob + eps))
     else:
-        return -(TT.log(e_prob))
+        return -(TT.log(e_prob + eps))
 
 class FedLSTMLasagne(object):
 
