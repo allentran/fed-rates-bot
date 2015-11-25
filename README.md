@@ -5,3 +5,4 @@ Various experiments based around translating Fed documents to word embeddings, a
 
 The models revolve around various forms of stacked LSTMs and piping the output to either a mixture density layer or the standard squared loss error.  The best result that I have is shown below (on test data).  More to come.
 
+![Results](https://github.com/allentran/fed-rates-bot/blob/master/prelim_results.png)
