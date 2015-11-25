@@ -62,6 +62,7 @@ class FedLSTMLasagne(object):
             target_size=3,
             init_word_vectors=None,
             l2_scale=1e-4,
+            mixture_density=True,
     ):
 
         self.inputs_indexes = TT.tensor3(dtype='int32') # batch x sentences x T
@@ -105,14 +106,40 @@ class FedLSTMLasagne(object):
         merge_dropout = lasagne.layers.DropoutLayer(merge_layer, p=0.5)
 
         preoutput_layer = lasagne.layers.DenseLayer(merge_dropout, hidden_size)
-        output_layer = lasagne.layers.DenseLayer(preoutput_layer, (2 + target_size) * n_mixtures, nonlinearity=None)
 
-        l2_penalty = regularize_network_params(output_layer, l2)
+        if mixture_density:
+            output_layer = lasagne.layers.DenseLayer(preoutput_layer, (2 + target_size) * n_mixtures, nonlinearity=None)
+            l2_penalty = regularize_network_params(output_layer, l2)
+            priors, means, stds = mixture_density_outputs(lasagne.layers.get_output(output_layer, deterministic=False), target_size, n_mixtures)
+            priors_det, means_det, stds_det = mixture_density_outputs(lasagne.layers.get_output(output_layer, deterministic=True), target_size, n_mixtures)
+            loss = mixture_density_loss(priors, means, stds, self.targets, target_size).mean() + l2_penalty * l2_scale
+            cost_ex_l2 = mixture_density_loss(priors_det, means_det, stds_det, self.targets, target_size).mean()
 
-        priors, means, stds = mixture_density_outputs(lasagne.layers.get_output(output_layer, deterministic=False), target_size, n_mixtures)
-        priors_det, means_det, stds_det = mixture_density_outputs(lasagne.layers.get_output(output_layer, deterministic=True), target_size, n_mixtures)
-        loss = mixture_density_loss(priors, means, stds, self.targets, target_size).mean() + l2_penalty * l2_scale
-        cost_ex_l2 = mixture_density_loss(priors_det, means_det, stds_det, self.targets, target_size).mean()
+            self._output = theano.function(
+                [
+                    self.inputs_indexes,
+                    self.last_word_in_sentence,
+                    self.last_sentence_in_doc,
+                    self.regimes,
+                    self.doc_types,
+                ],
+                [priors_det, means_det, stds_det],
+            )
+        else:
+            output_layer = lasagne.layers.DenseLayer(preoutput_layer, target_size)
+            l2_penalty = regularize_network_params(output_layer, l2)
+            loss = lasagne.objectives.squared_error(lasagne.layers.get_output(output_layer, deterministic=False), self.targets).mean() + l2_penalty * l2_scale
+            cost_ex_l2 = TT.sqrt(lasagne.objectives.squared_error(lasagne.layers.get_output(output_layer, deterministic=True), self.targets).mean())
+            self._output = theano.function(
+                [
+                    self.inputs_indexes,
+                    self.last_word_in_sentence,
+                    self.last_sentence_in_doc,
+                    self.regimes,
+                    self.doc_types,
+                ],
+                lasagne.layers.get_output(output_layer, deterministic=True),
+            )
 
         params = lasagne.layers.get_all_params(output_layer, trainable=True)
         updates = lasagne.updates.adadelta(loss, params)
@@ -142,16 +169,6 @@ class FedLSTMLasagne(object):
             cost_ex_l2,
         )
 
-        self._output = theano.function(
-            [
-                self.inputs_indexes,
-                self.last_word_in_sentence,
-                self.last_sentence_in_doc,
-                self.regimes,
-                self.doc_types,
-            ],
-            [priors_det, means_det, stds_det],
-        )
 
     def train(self, targets, sentences, last_word, last_sentence, regimes, doctypes):
         return self._train(
