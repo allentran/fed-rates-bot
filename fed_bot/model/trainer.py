@@ -8,7 +8,7 @@ import allen_utils
 import numpy as np
 import joblib
 
-import lstm
+import lstm, lstm_lasagne
 
 logger = allen_utils.get_logger(__name__)
 
@@ -36,13 +36,17 @@ def load_data(data_path, n_rates=3, batch_size=32):
         target_rates = np.zeros((batch_size, n_rates))
         word_vectors = np.zeros((max_length, max_n_sentences, batch_size))
         max_mask = np.ones((max_length, max_n_sentences, batch_size))
+        last_sentence = np.ones(batch_size)
+        last_word_in_sentence = np.ones((max_n_sentences, batch_size))
         regimes = np.zeros(batch_size)
         doc_types = np.zeros(batch_size)
         for data_idx in xrange(batch_size):
             obs = data_to_batch[data_idx]
             sentences = obs['sentences']
+            last_sentence[data_idx] = len(sentences) - 1
             for sentence_number, sentence in enumerate(sentences):
                 length = len(sentence)
+                last_word_in_sentence[sentence_number, data_idx] = length - 1
                 word_vectors[0:length, sentence_number, data_idx] = sentence
                 max_mask[length:, sentence_number, data_idx] = mask_value
             target_rates[data_idx, :] = calc_target_rates(obs['rates'], days=['30', '90', '180'])
@@ -52,6 +56,8 @@ def load_data(data_path, n_rates=3, batch_size=32):
 
         return dict(
             word_vectors=word_vectors.astype('int32'),
+            last_sentence=last_sentence.astype('int32'),
+            last_word_in_sentence=last_word_in_sentence.astype('int32'),
             max_mask=max_mask.astype('float32'),
             rates=target_rates.astype('float32'),
             doc_types=np.array(doc_types).astype('int32'),
@@ -106,7 +112,88 @@ def evaluate(model, data):
 
     return outputs
 
-def train(data_path, vocab_path):
+def eval_lasagne_on_test(model, test_data):
+
+    test_outputs = []
+
+    for obs in test_data:
+        priors, means, stds = model.get_output(
+            np.swapaxes(obs['word_vectors'], 0, 2),
+            np.swapaxes(obs['last_word_in_sentence'], 0, 1),
+            obs['last_sentence'],
+            obs['regimes'],
+            obs['doc_types']
+        )
+        batch_size, target_size, n_mixtures = means.shape
+        for obs_idx in xrange(batch_size):
+            test_output = dict()
+            test_output['rates'] = obs['rates'][obs_idx, :]
+            test_output['priors'] = priors[obs_idx, :]
+            test_output['means'] = means[obs_idx, :, :]
+            test_output['stds'] = stds[obs_idx, :]
+            test_outputs.append(test_output)
+
+    return test_outputs
+
+def train_lasagne(data_path, vocab_path):
+
+    n_epochs = 500
+    test_frac = 0.2
+
+    data = load_data(data_path, batch_size=4)
+
+    word_embeddings = build_wordvectors(vocab_path)
+
+    test_idx = int(round(len(data) * test_frac))
+    test_data = data[:test_idx]
+    train_data = data[test_idx:]
+
+    model = lstm_lasagne.FedLSTMLasagne(
+        hidden_size=32,
+        lstm_size=64,
+        n_mixtures=2,
+        n_regimes=6,
+        regime_size=5,
+        doc_size=5,
+        n_words=word_embeddings.shape[0],
+        word_size=word_embeddings.shape[1],
+        init_word_vectors=word_embeddings
+    )
+
+
+    for epoch_idx in xrange(n_epochs):
+        train_cost = 0
+        random.shuffle(train_data)
+        for obs in train_data:
+            train_cost += model.train(
+                obs['rates'],
+                np.swapaxes(obs['word_vectors'], 0, 2),
+                np.swapaxes(obs['last_word_in_sentence'], 0, 1),
+                obs['last_sentence'],
+                obs['regimes'],
+                obs['doc_types']
+            )
+
+        if epoch_idx % 5 == 0:
+            test_cost = 0
+            for obs in test_data:
+                test_cost += model.get_cost(
+                    obs['rates'],
+                    np.swapaxes(obs['word_vectors'], 0, 2),
+                    np.swapaxes(obs['last_word_in_sentence'], 0, 1),
+                    obs['last_sentence'],
+                    obs['regimes'],
+                    obs['doc_types']
+                )
+            test_cost /= len(test_data)
+            train_cost /= len(train_data)
+            logger.info('train_cost=%s, test_cost=%s after %s epochs', train_cost, test_cost, epoch_idx)
+
+    test_results = eval_lasagne_on_test(model, train_data)
+    joblib.dump(test_results, 'results.pkl')
+
+
+def train_theano(data_path, vocab_path):
 
     n_epochs = 1
     test_frac = 0.2
@@ -169,4 +256,4 @@ def train(data_path, vocab_path):
     IPython.embed()
 
 if __name__ == "__main__":
-    train('data/paired_data.json', 'data/dictionary.json')
+    train_lasagne('data/paired_data.json', 'data/dictionary.json')
