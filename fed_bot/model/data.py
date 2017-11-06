@@ -173,8 +173,6 @@ class DataTransformer(object):
                         for token in nltk.word_tokenize(sent):
                             if token in self.vocab:
                                 sentence_as_idxes.append(self.vocab[token])
-                            else:
-                                sentence_as_idxes.append(0)
                         doc_sents.append(sentence_as_idxes)
 
                 paired_doc = PairedDocAndRates(date, doc_sents, doc_path.find('minutes') > -1)

@@ -3,14 +3,13 @@ __author__ = 'allentran'
 import random
 import json
 
-from spacy.en import English
-import allen_utils
+from data import get_json_s3
+from keras.utils.data_utils import Sequence
+from litibackend.stats.realtime import glove
+import cnn_attention
 import numpy as np
 import joblib
 
-import lstm, lstm_lasagne
-
-logger = allen_utils.get_logger(__name__)
 
 def load_data(data_path, n_rates=3, batch_size=32):
 
@@ -25,7 +24,7 @@ def load_data(data_path, n_rates=3, batch_size=32):
             else:
                 target_rates.append(mean_diff)
 
-        return np.array(target_rates) / 100.0
+        return np.array(target_rates)
 
     def merge(data_to_batch, mask_value=0):
 
@@ -34,21 +33,15 @@ def load_data(data_path, n_rates=3, batch_size=32):
         batch_size = len(data_to_batch)
 
         target_rates = np.zeros((batch_size, n_rates))
-        word_vectors = np.zeros((max_length, max_n_sentences, batch_size))
-        max_mask = np.ones((max_length, max_n_sentences, batch_size))
-        last_sentence = np.ones(batch_size)
-        last_word_in_sentence = np.ones((max_n_sentences, batch_size))
+        word_vectors = np.zeros((batch_size, max_n_sentences, max_length))
         regimes = np.zeros(batch_size)
         doc_types = np.zeros(batch_size)
         for data_idx in xrange(batch_size):
             obs = data_to_batch[data_idx]
             sentences = obs['sentences']
-            last_sentence[data_idx] = len(sentences) - 1
             for sentence_number, sentence in enumerate(sentences):
                 length = len(sentence)
-                last_word_in_sentence[sentence_number, data_idx] = length - 1
-                word_vectors[0:length, sentence_number, data_idx] = sentence
-                max_mask[length:, sentence_number, data_idx] = mask_value
+                word_vectors[data_idx, sentence_number, :length, ] = sentence
             target_rates[data_idx, :] = calc_target_rates(obs['rates'], days=['30', '90', '180'])
             if obs['is_minutes']:
                 doc_types[data_idx] = 1
@@ -56,9 +49,6 @@ def load_data(data_path, n_rates=3, batch_size=32):
 
         return dict(
             word_vectors=word_vectors.astype('int32'),
-            last_sentence=last_sentence.astype('int32'),
-            last_word_in_sentence=last_word_in_sentence.astype('int32'),
-            max_mask=max_mask.astype('float32'),
             rates=target_rates.astype('float32'),
             doc_types=np.array(doc_types).astype('int32'),
             regimes=np.array(regimes).astype('int32'),
@@ -72,6 +62,7 @@ def load_data(data_path, n_rates=3, batch_size=32):
         paired_data = json.load(json_file)
 
     paired_data = [obs for obs in paired_data if '0' in obs['rates'] and len(obs['rates'].keys()) > 1]
+    random.seed(1692)
     random.shuffle(paired_data)
 
     batched_data = []
@@ -83,24 +74,6 @@ def load_data(data_path, n_rates=3, batch_size=32):
 
     return batched_data
 
-def build_wordvectors(vocab_dict_path):
-
-    with open(vocab_dict_path, 'r') as json_f:
-        vocab = json.load(json_f)
-
-    word_vectors = np.random.normal(size=(len(vocab), 300))
-    nlp = English()
-
-    for token, position in vocab.iteritems():
-        try:
-            vector = nlp(unicode(token))[0].repvec
-            if len(vector[vector != 0]) > 0:
-                word_vectors[position, :] = vector
-        except ValueError:
-            logger.info("No init vector for %s", token)
-
-
-    return word_vectors.astype('float32')
 
 def evaluate(model, data):
     outputs = []
@@ -111,6 +84,7 @@ def evaluate(model, data):
         )
 
     return outputs
+
 
 def eval_lasagne_on_test(model, test_data):
 
@@ -255,5 +229,40 @@ def train_theano(data_path, vocab_path):
     import IPython
     IPython.embed()
 
+
+class CNNInputs(Sequence):
+
+    def __init__(self, data):
+        self.data = data
+
+    def __len__(self):
+        return 5
+        # return len(self.data)
+
+    def __getitem__(self, index):
+        data = self.data[index]
+        return data['word_vectors'], data['rates']#[:, :, None]
+
+def train_cnn():
+    batched_data = load_data('data/paired_data.json')
+    cnn_inputs = CNNInputs(batched_data)
+    vocab = get_json_s3('litidata', 'misc/glove.vocab.json')
+    glove_vectors = glove.PretrainedGlove(vocab=vocab, localpath='~/Downloads/glove.6B/glove.6B.100d.txt')
+
+    model = cnn_attention.CNNAttentionModel(len(vocab) + 1)
+    model.compile(glove_vectors.build_embedding_matrix())
+    model.model.fit_generator(
+        cnn_inputs,
+        len(cnn_inputs),
+        use_multiprocessing=False,
+        epochs=200,
+        shuffle=True,
+    )
+
+    import IPython
+    IPython.embed()
+    assert False
+
+
 if __name__ == "__main__":
-    train_lasagne('data/paired_data.json', 'data/dictionary.json')
+    train_cnn()
